@@ -1,0 +1,4 @@
+/.bsp/
+target/
+!src/main/scala/ytil
+!src/test/scala/ytil
