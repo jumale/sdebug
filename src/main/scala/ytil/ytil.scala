@@ -1,3 +1,5 @@
+import play.api.libs.json.{JsValue, Json}
+
 package object ytil {
   private val printColorsQueue = Seq(
     Console.CYAN,
@@ -50,6 +52,28 @@ package object ytil {
     val line = currentLine.copy(prefix = name)
     Console.println(s"---------- $line ----------")
     Console.println(prettyFormat(a))
+    a match {
+      case e: Throwable =>
+        Console.println(s"  message: ${Console.RED}${e.getMessage}${Console.RESET}")
+        Console.println(s"  trace:")
+        e.getStackTrace.foreach { se =>
+          val clazz = s"${Console.RED}${se.getClassName}"
+          val method = se.getMethodName
+          val file = s"${Console.BLACK}${se.getFileName}:${se.getLineNumber}"
+          Console.println(s"    $clazz::$method($file)${Console.RESET}")
+        }
+      case _ => ()
+    }
+  }
+
+  def dump(v: Any, fileName: String): Unit =
+    dumpBytes(v.toString.getBytes, fileName)
+
+  def dumpBytes(v: Array[Byte], fileName: String): Unit = {
+    import java.io._
+    val target = new BufferedOutputStream(new FileOutputStream(s"target/$fileName"))
+    try v.foreach(target.write(_))
+    finally target.close()
   }
 
   private def thread: String = if (showThread) s" [thread:${Thread.currentThread().getId}]" else ""
@@ -61,7 +85,7 @@ package object ytil {
 
   private def currentLine: Line =
     (new Exception).getStackTrace
-      .lift(2)
+      .lift(3)
       .map(s => Line(s.getFileName, s.getLineNumber))
       .getOrElse(Line("unknown", 0))
 
@@ -83,33 +107,45 @@ package object ytil {
     val fieldIndent = indent + (" " * indentSize)
     val thisDepth = prettyFormat(_: Any, indentSize, maxElementWidth, depth)
     val nextDepth = prettyFormat(_: Any, indentSize, maxElementWidth, depth + 1)
-    def cBraces(s: String, color: String = Console.YELLOW): String =
-      s"$color(${Console.RESET}$s$color)${Console.RESET}"
-    def cField(s: String): String = s"${Console.GREEN}$s${Console.RESET}"
+
+    def cBraces(value: String, prefix: String = "", color: String = Console.YELLOW): String = {
+      val zeroByte = new String(Array[Byte](0)) // to fix strange artefact when it's followed by a line-break
+      s"$color$prefix(${Console.RESET}$value$color)${Console.RESET}$zeroByte"
+    }
+    def cField(s: String): String = {
+      s"${Console.GREEN}$s${Console.RESET}"
+    }
+
     a match {
       // Make Strings look similar to their literal form.
       case s: String =>
         val replaceMap = Seq("\n" -> "\\n", "\r" -> "\\r", "\t" -> "\\t", "\"" -> "\\\"")
         "\"" + replaceMap.foldLeft(s) { case (acc, (c, r)) => acc.replace(c, r) } + "\""
-      case None => s"${Console.MAGENTA}None${Console.RESET}"
+
+      case b: Boolean =>
+        s"${Console.YELLOW + Console.BOLD}$b${Console.RESET}"
+
+      case None =>
+        s"${Console.MAGENTA}None${Console.RESET}"
+
       case Some(v) =>
         s"${Console.MAGENTA}Some(${Console.RESET}${thisDepth(v)}${Console.MAGENTA})${Console.RESET}"
+
       // For an empty Seq just use its normal String representation.
       case xs: Seq[_] if xs.isEmpty =>
         Console.BLUE + xs.toString() + Console.RESET
+
       case xs: Seq[_] =>
-        val prefix =
-          s"${Console.BLUE}${xs.getClass.getSimpleName}${Console.RESET}"
+        val prefix = xs.getClass.getSimpleName
         val resultOneLine =
-          prefix + cBraces(xs.map(nextDepth).mkString(s"${Console.BLUE}, ${Console.RESET}"), Console.BLUE)
+          cBraces(xs.map(nextDepth).mkString(s"${Console.BLUE}, ${Console.RESET}"), prefix, Console.BLUE)
         if (resultOneLine.length <= maxElementWidth) {
           return resultOneLine
         }
         // Otherwise, build it with newlines and proper field indents.
-        val result = xs
-          .map(x => s"\n$fieldIndent${nextDepth(x)}")
-          .mkString(s"${Console.BLUE}, ${Console.RESET}")
-        prefix + cBraces(result.substring(0, result.length - 1) + "\n" + indent, Console.BLUE)
+        val result = xs.map(x => s"\n$fieldIndent${nextDepth(x)}").mkString(s"${Console.BLUE}, ${Console.RESET}")
+        cBraces(result.substring(0, result.length - 1) + "\n" + indent, prefix, Console.BLUE)
+
       // Product should cover case classes.
       case m: Map[_, _] =>
         val format = (v: String) => s"${Console.CYAN}Map(${Console.RESET}$v${Console.CYAN})${Console.RESET}"
@@ -122,6 +158,23 @@ package object ytil {
           if (resultOneLine.length <= maxElementWidth) return resultOneLine
           format(s"\n${keyVal.mkString(s"${Console.CYAN},${Console.RESET}\n")}\n$indent")
         }
+
+      case j: JsValue =>
+        cBraces(
+          prefix = "JsValue",
+          value = Json
+            .prettyPrint(j)
+            .replaceAll("""("[^"]+")\s*:\s*""", s"${Console.GREEN}$$1${Console.RESET} -> ")
+            .replace("[ ]", s"${Console.BLUE}Vector()${Console.RESET}")
+            .replace("{ }", "Json.obj()")
+            .replaceAll("true", s"${Console.MAGENTA + Console.BOLD}true${Console.RESET}")
+            .replaceAll("false", s"${Console.MAGENTA + Console.BOLD}true${Console.RESET}")
+            .replaceAll(": \\d+", s"${Console.CYAN}true${Console.RESET}")
+            .replaceAll("\\n(\\s*)", "\n" + indent + "$1")
+            .replaceAll("^\\{", "")
+            .replaceAll("\\}$", "")
+        )
+
       case p: Product =>
         val prefix = s"${Console.YELLOW}${p.productPrefix}${Console.RESET}"
         // We'll use reflection to get the constructor arg names and values.
@@ -152,6 +205,7 @@ package object ytil {
             // Otherwise, build it with newlines and proper field indents.
             s"$prefix${cBraces(s"\n${prettyFields.mkString(s"${Console.YELLOW},${Console.RESET}\n")}\n$indent")}"
         }
+
       // If we haven't specialized this type, just use its toString.
       case _ => a.toString
     }
