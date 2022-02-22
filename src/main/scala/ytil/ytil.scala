@@ -1,4 +1,6 @@
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.{JsObject, JsPath, JsValue, Json}
+
+import scala.annotation.tailrec
 
 package object ytil {
   private val printColorsQueue = Seq(
@@ -78,16 +80,58 @@ package object ytil {
 
   private def thread: String = if (showThread) s" [thread:${Thread.currentThread().getId}]" else ""
 
-  private final case class Line(file: String, number: Int, prefix: String = "") {
+  final case class Line(file: String, number: Int, prefix: String = "") {
     override def toString: String = s"${if (prefix.isEmpty) "" else s"$prefix "}$file:$number"
     def asLink: String = s"...($toString)"
+    def isEmpty: Boolean = this == Line.empty
+  }
+  object Line {
+    val empty: Line = Line("unknown", 0)
   }
 
-  private def currentLine: Line =
-    (new Exception).getStackTrace
-      .lift(3)
+  def fullStack: Seq[Line] =
+    (new Exception).getStackTrace.toSeq
       .map(s => Line(s.getFileName, s.getLineNumber))
-      .getOrElse(Line("unknown", 0))
+
+  def lineOfStack(n: Int): Line =
+    (new Exception).getStackTrace
+      .lift(n)
+      .map(s => Line(s.getFileName, s.getLineNumber))
+      .getOrElse(Line.empty)
+
+  def currentLine: Line = lineOfStack(3)
+
+  def catchLine(patterns: String*): Line =
+    patterns
+      .collectFirst {
+        case pattern if !catchLineRec(pattern, 0).isEmpty => catchLineRec(pattern, 0)
+      }
+      .getOrElse(Line.empty)
+
+  @tailrec
+  private def catchLineRec(pattern: String, n: Int): Line = {
+    val c = lineOfStack(n)
+    if (c.isEmpty || c.file.matches(pattern))
+      c
+    else
+      catchLineRec(pattern, n + 1)
+  }
+
+  def prettyDiff(a: Any, b: Any): Unit = {
+    val prettyA = prettyFormat(a).split('\n')
+    val prettyB = prettyFormat(b).split('\n')
+    val diff = prettyA.zipWithIndex.flatMap { case (line, idx) =>
+      val fA = line.replaceAll("""\u001b\[\d+m""", "")
+      val fB = prettyB(idx).replaceAll("""\u001b\[\d+m""", "")
+      if (fA == fB)
+        Seq(line)
+      else
+        Seq(Console.RED + "-" + fA + Console.RESET, Console.GREEN + "+" + fB + Console.RESET)
+    }
+    val line = currentLine
+    Console.println(s"---------- $line ----------")
+    Console.println(diff.mkString("\n"))
+  }
 
   def prettyPrint(a: Any): Unit = prettyPrint("", a)
 
