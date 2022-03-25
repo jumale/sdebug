@@ -1,4 +1,4 @@
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.{JsArray, JsBoolean, JsNumber, JsObject, JsString, JsValue, Json}
 
 import scala.annotation.tailrec
 
@@ -45,10 +45,10 @@ package object ytil {
     Console.println(s"$color-> $msg${Console.RESET} ${Console.BLACK}${line.asLink}$thread${Console.RESET}")
   }
 
-  def prettyPrint(v: Any): Unit = prettyPrint(lineOfStack(2), v)
-  def prettyPrintMap(v: (String, Any)*): Unit = prettyPrint(lineOfStack(2), MapValues(v))
-  def prettyPrint(name: String, v: Any): Unit = prettyPrint(lineOfStack(2).copy(prefix = name), v)
-  def prettyPrint(line: Line, v: Any): Unit = {
+  def prettyPrint(v: Any): Unit = prettyPrintImpl(v)
+  def prettyPrintMap(v: (String, Any)*): Unit = prettyPrintImpl(MapValues(v))
+  private def prettyPrintImpl(v: Any): Unit = {
+    val line = lineOfStack(3)
     Console.println(Console.BLACK + line.asHeadLink + Console.RESET)
     Console.println(prettyFormat(v))
     v match {
@@ -194,15 +194,14 @@ package object ytil {
     def cSome(content: String): String = s"${Console.MAGENTA}Some($content${Console.MAGENTA})"
     def cBool(content: String = ""): String = Console.RED + Console.BOLD + content
     lazy val strEscape = Seq("\n" -> "\\n", "\r" -> "\\r", "\t" -> "\\t", "\"" -> "\\\"")
-    lazy val clazz =
+    lazy val clazz = {
       a.getClass.getName match {
-        case "scala.collection.immutable.$colon$colon" =>
-          "::"
-        case "scala.collection.immutable.Nil$" =>
-          "Seq"
-        case _ =>
-          a.getClass.getSimpleName
+        case "scala.collection.immutable.$colon$colon" => "Seq"
+        case "scala.collection.immutable.Nil$"         => "Seq"
+        case "scala.collection.immutable.Vector1"      => "Vector"
+        case _                                         => a.getClass.getSimpleName
       }
+    }
 
     val fmt =
       a match {
@@ -225,20 +224,20 @@ package object ytil {
           cNone
         case Some(v) =>
           cSome(thisDepth(v))
-
         case j: JsValue =>
-          cJson(
-            Console.RESET +
-              Json
-                .prettyPrint(j)
-                .replaceAll("""("[^"]+")\s*:\s*""", s"${Console.GREEN}$$1${Console.RESET} -> ")
-                .replace("[ ]", s"${Console.BLUE}Vector()${Console.RESET}")
-                .replace("{ }", "Json.obj()")
-                .replaceAll("true", s"${Console.MAGENTA + Console.BOLD}true${Console.RESET}")
-                .replaceAll("false", s"${Console.MAGENTA + Console.BOLD}false${Console.RESET}")
-                .replaceAll(": (\\d+)", s": ${Console.CYAN}$$1${Console.RESET}")
-                .replaceAll("\\n(\\s*)", "\n" + indent + "$1")
-          )
+          prettyFormatJson(j, indentSize, maxElementWidth - (depth * indentSize), depth)
+//          cJson(
+//            Console.RESET +
+//              Json
+//                .prettyPrint(j)
+//                .replaceAll("""("[^"]+")\s*:\s*""", s"${Console.GREEN}$$1${Console.RESET} -> ")
+//                .replace("[ ]", s"${Console.BLUE}Vector()${Console.RESET}")
+//                .replace("{ }", "Json.obj()")
+//                .replaceAll("true", s"${Console.MAGENTA + Console.BOLD}true${Console.RESET}")
+//                .replaceAll("false", s"${Console.MAGENTA + Console.BOLD}false${Console.RESET}")
+//                .replaceAll(": (\\d+)", s": ${Console.CYAN}$$1${Console.RESET}")
+//                .replaceAll("\\n(\\s*)", "\n" + indent + "$1")
+//          )
 
         case _: Seq[_] | _: Set[_] =>
           val s = a.asInstanceOf[Iterable[_]]
@@ -273,6 +272,7 @@ package object ytil {
               cMapField(nextDepth(k)) + cMapEq() + nextDepth(v)
             }
             .mkString(cMapSep + "\n")
+            .replaceAll("^\n", "")
 
         case p: Product =>
           val fields = a.getClass.getDeclaredFields.filterNot(_.isSynthetic).map(_.getName)
@@ -322,6 +322,52 @@ package object ytil {
       fmt + Console.RESET
     else
       fmt
+  }
+
+  def prettyFormatJson(a: JsValue, indentSize: Int = 2, maxElementWidth: Int = 120, depth: Int = 1): String = {
+    val indent = " " * depth * indentSize
+    val fieldIndent = indent + (" " * indentSize)
+    val thisDepth = prettyFormatJson(_: JsValue, indentSize, maxElementWidth, depth)
+    val nextDepth = prettyFormatJson(_: JsValue, indentSize, maxElementWidth, depth + 1)
+
+    a match {
+      case s: JsString =>
+        Console.GREEN + '"' + s.value + '"'
+
+      case n: JsNumber =>
+        Console.CYAN + n.value
+
+      case b: JsBoolean =>
+        Console.RED + Console.BOLD + b.value + Console.RESET
+
+      case obj: JsObject =>
+        val prefix = s"${Console.YELLOW}Json.obj(${Console.RESET}"
+        val suffix = s"${Console.YELLOW})${Console.RESET}"
+        val fields = obj.fields.map { case (field, value) =>
+          Console.GREEN + nextDepth(JsString(field)) + " -> " + nextDepth(value)
+        }
+        val oneLine = prefix + fields.mkString(", ") + suffix
+        if (oneLine.length <= maxElementWidth) {
+          oneLine
+        } else {
+          prefix + "\n" + fieldIndent + fields.mkString(s",\n$fieldIndent") + "\n" + indent + suffix
+        }
+
+      case arr: JsArray =>
+        val prefix = s"${Console.BLUE}Json.arr(${Console.RESET}"
+        val suffix = s"${Console.BLUE})${Console.RESET}"
+        val elements = arr.value.map { value =>
+          nextDepth(value)
+        }
+        val oneLine = prefix + elements.mkString(", ") + suffix
+        if (oneLine.length <= maxElementWidth) {
+          oneLine
+        } else {
+          prefix + "\n" + fieldIndent + elements.mkString(s",\n$fieldIndent") + "\n" + indent + suffix
+        }
+
+      case _ => "-- other --"
+    }
   }
 
   final private case class MapValues(items: Seq[(String, Any)])
