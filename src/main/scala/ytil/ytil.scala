@@ -1,4 +1,4 @@
-import play.api.libs.json.{JsObject, JsPath, JsValue, Json}
+import play.api.libs.json.{JsValue, Json}
 
 import scala.annotation.tailrec
 
@@ -23,7 +23,8 @@ package object ytil {
   private var lastColorIndex: Int = -1
   private def nextColorIndex: Int = {
     lastColorIndex += 1
-    if (lastColorIndex >= printColorsQueue.length) lastColorIndex = 0
+    if (lastColorIndex >= printColorsQueue.length)
+      lastColorIndex = 0
     lastColorIndex
   }
   private def nextColor(key: String): String = this.synchronized {
@@ -39,37 +40,65 @@ package object ytil {
   val showThread: Boolean = true
 
   def log(msg: String): Unit = {
-    val line = currentLine
+    val line = lineOfStack(2)
     val color = nextColor(line.toString)
     Console.println(s"$color-> $msg${Console.RESET} ${Console.BLACK}${line.asLink}$thread${Console.RESET}")
   }
 
+  def prettyPrint(v: Any): Unit = prettyPrint(lineOfStack(2), v)
+  def prettyPrintMap(v: (String, Any)*): Unit = prettyPrint(lineOfStack(2), MapValues(v))
+  def prettyPrint(name: String, v: Any): Unit = prettyPrint(lineOfStack(2).copy(prefix = name), v)
+  def prettyPrint(line: Line, v: Any): Unit = {
+    Console.println(Console.BLACK + line.asHeadLink + Console.RESET)
+    Console.println(prettyFormat(v))
+    v match {
+      case e: Throwable =>
+        Console.println(s"   ${Console.RED}error: ${Console.YELLOW}${e.getMessage}${Console.RESET}")
+        Console.println(s"   ${Console.RED}trace:")
+        e.getStackTrace
+          .foreach { se =>
+            val clazz = s"${Console.YELLOW}${se.getClassName}"
+            val method = se.getMethodName
+            val file = s"${Console.BLACK}${se.getFileName}:${se.getLineNumber}"
+            Console.println(s"    $clazz::$method($file)${Console.RESET}")
+          }
+      case _ =>
+        ()
+    }
+  }
+
+  def prettyDiff(a: Any, b: Any): Unit = {
+    val prettyA = prettyFormat(a).split('\n')
+    val prettyB = prettyFormat(b).split('\n')
+    val diff = prettyA.zipWithIndex
+      .flatMap { case (line, idx) =>
+        val fA = Option(line.replaceAll('\u001b'.toString + """\[\d+m""", ""))
+        val fB = prettyB.lift(idx).map(_.replaceAll('\u001b'.toString + """\[\d+m""", ""))
+        if (fA == fB)
+          Seq(line)
+        else
+          Seq(
+            fA.map(s => Console.RED + "-" + s + Console.RESET),
+            fB.map(s => Console.GREEN + "-" + s + Console.RESET)
+          ).flatten
+      }
+    val line = lineOfStack(2)
+    Console.println(Console.BLACK + line.asHeadLink + Console.RESET)
+    Console.println(diff.mkString("\n"))
+  }
+
+  def trace(): Unit = {
+    Console.println(Console.BLACK + lineOfStack(2).asHeadLink + Console.RESET)
+    Console.println(fullStack.tail.tail.map(_.asLink).mkString("\n"))
+  }
+
   def sleep(millis: Long): Unit = {
-    val line = currentLine
+    val line = lineOfStack(2)
     Console.println(s"-> ⏱  ${millis}ms ${Console.BLACK}${line.asLink}$thread${Console.RESET}")
     Thread.sleep(millis)
   }
 
-  def prettyPrint(name: String, a: Any): Unit = {
-    val line = currentLine.copy(prefix = name)
-    Console.println(s"---------- $line ----------")
-    Console.println(prettyFormat(a))
-    a match {
-      case e: Throwable =>
-        Console.println(s"  message: ${Console.RED}${e.getMessage}${Console.RESET}")
-        Console.println(s"  trace:")
-        e.getStackTrace.foreach { se =>
-          val clazz = s"${Console.RED}${se.getClassName}"
-          val method = se.getMethodName
-          val file = s"${Console.BLACK}${se.getFileName}:${se.getLineNumber}"
-          Console.println(s"    $clazz::$method($file)${Console.RESET}")
-        }
-      case _ => ()
-    }
-  }
-
-  def dump(v: Any, fileName: String): Unit =
-    dumpBytes(v.toString.getBytes, fileName)
+  def dump(v: Any, fileName: String): Unit = dumpBytes(v.toString.getBytes, fileName)
 
   def dumpBytes(v: Array[Byte], fileName: String): Unit = {
     import java.io._
@@ -78,35 +107,39 @@ package object ytil {
     finally target.close()
   }
 
-  private def thread: String = if (showThread) s" [thread:${Thread.currentThread().getId}]" else ""
+  private def thread: String =
+    if (showThread)
+      s" [thread:${Thread.currentThread().getId}]"
+    else
+      ""
 
   final case class Line(file: String, number: Int, prefix: String = "") {
-    override def toString: String = s"${if (prefix.isEmpty) "" else s"$prefix "}$file:$number"
+    override def toString: String =
+      s"${if (prefix.isEmpty)
+        ""
+      else
+        s"$prefix "}$file:$number"
     def asLink: String = s"...($toString)"
+    def asHeadLink: String = s".....................($toString)....................."
     def isEmpty: Boolean = this == Line.empty
   }
   object Line {
     val empty: Line = Line("unknown", 0)
   }
 
-  def fullStack: Seq[Line] =
-    (new Exception).getStackTrace.toSeq
-      .map(s => Line(s.getFileName, s.getLineNumber))
+  def fullStack: Seq[Line] = (new Exception).getStackTrace.toSeq.map(s => Line(s.getFileName, s.getLineNumber))
 
-  def lineOfStack(n: Int): Line =
-    (new Exception).getStackTrace
-      .lift(n)
-      .map(s => Line(s.getFileName, s.getLineNumber))
-      .getOrElse(Line.empty)
+  def lineOfStack(n: Int): Line = (new Exception).getStackTrace
+    .lift(n)
+    .map(s => Line(s.getFileName, s.getLineNumber))
+    .getOrElse(Line.empty)
 
-  def currentLine: Line = lineOfStack(3)
-
-  def catchLine(patterns: String*): Line =
-    patterns
-      .collectFirst {
-        case pattern if !catchLineRec(pattern, 0).isEmpty => catchLineRec(pattern, 0)
-      }
-      .getOrElse(Line.empty)
+  def catchLine(patterns: String*): Line = patterns
+    .collectFirst {
+      case pattern if !catchLineRec(pattern, 0).isEmpty =>
+        catchLineRec(pattern, 0)
+    }
+    .getOrElse(Line.empty)
 
   @tailrec
   private def catchLineRec(pattern: String, n: Int): Line = {
@@ -116,24 +149,6 @@ package object ytil {
     else
       catchLineRec(pattern, n + 1)
   }
-
-  def prettyDiff(a: Any, b: Any): Unit = {
-    val prettyA = prettyFormat(a).split('\n')
-    val prettyB = prettyFormat(b).split('\n')
-    val diff = prettyA.zipWithIndex.flatMap { case (line, idx) =>
-      val fA = line.replaceAll("""\u001b\[\d+m""", "")
-      val fB = prettyB(idx).replaceAll("""\u001b\[\d+m""", "")
-      if (fA == fB)
-        Seq(line)
-      else
-        Seq(Console.RED + "-" + fA + Console.RESET, Console.GREEN + "+" + fB + Console.RESET)
-    }
-    val line = currentLine
-    Console.println(s"---------- $line ----------")
-    Console.println(diff.mkString("\n"))
-  }
-
-  def prettyPrint(a: Any): Unit = prettyPrint("", a)
 
   /** Pretty formats a Scala value similar to its source representation. Particularly useful for case classes.
     * @param a
@@ -146,112 +161,168 @@ package object ytil {
     *   - Initial depth to pretty format indents.
     * @return
     */
-  def prettyFormat(a: Any, indentSize: Int = 2, maxElementWidth: Int = 60, depth: Int = 0): String = {
+  def prettyFormat(a: Any, indentSize: Int = 2, maxElementWidth: Int = 120, depth: Int = 0): String = {
     val indent = " " * depth * indentSize
     val fieldIndent = indent + (" " * indentSize)
     val thisDepth = prettyFormat(_: Any, indentSize, maxElementWidth, depth)
     val nextDepth = prettyFormat(_: Any, indentSize, maxElementWidth, depth + 1)
 
-    def cBraces(value: String, prefix: String = "", color: String = Console.YELLOW): String = {
-      val zeroByte = new String(Array[Byte](0)) // to fix strange artefact when it's followed by a line-break
-      s"$color$prefix(${Console.RESET}$value$color)${Console.RESET}$zeroByte"
-    }
-    def cField(s: String): String = {
-      s"${Console.GREEN}$s${Console.RESET}"
-    }
+    def cString(content: String): String = Console.GREEN + "\"" + content + "\""
+    def cNum(content: String): String = Console.CYAN + content
+    def cClass(name: String, content: String): String = s"${Console.YELLOW}$name($content${Console.YELLOW})"
+    def cClassSep: String = Console.YELLOW + ", "
+    def cClassEq(trim: Boolean = false): String =
+      Console.YELLOW +
+        (if (trim)
+           "="
+         else
+           " = ")
+    def cClassField(name: String): String = Console.RESET + name
+    def cColl(name: String, content: String = ""): String = s"${Console.BLUE}$name($content${Console.BLUE})"
+    def cCollSep: String = Console.BLUE + ", "
+    def cJson(content: String): String = s"${Console.CYAN}JsValue($content${Console.CYAN})"
+    def cMap(content: String): String = s"${Console.CYAN}Map($content${Console.CYAN})"
+    def cMapSep: String = Console.CYAN + ", "
+    def cMapEq(trim: Boolean = false): String =
+      Console.CYAN +
+        (if (trim)
+           "->"
+         else
+           " -> ")
+    def cMapField(name: String): String = Console.RESET + name
+    def cNone: String = Console.MAGENTA + "None"
+    def cSome(content: String): String = s"${Console.MAGENTA}Some($content${Console.MAGENTA})"
+    def cBool(content: String = ""): String = Console.RED + Console.BOLD + content
+    lazy val strEscape = Seq("\n" -> "\\n", "\r" -> "\\r", "\t" -> "\\t", "\"" -> "\\\"")
+    lazy val clazz =
+      a.getClass.getName match {
+        case "scala.collection.immutable.$colon$colon" =>
+          "::"
+        case "scala.collection.immutable.Nil$" =>
+          "Seq"
+        case _ =>
+          a.getClass.getSimpleName
+      }
 
-    a match {
-      // Make Strings look similar to their literal form.
-      case s: String =>
-        val replaceMap = Seq("\n" -> "\\n", "\r" -> "\\r", "\t" -> "\\t", "\"" -> "\\\"")
-        "\"" + replaceMap.foldLeft(s) { case (acc, (c, r)) => acc.replace(c, r) } + "\""
+    val fmt =
+      a match {
+        // Make Strings look similar to their literal form.
+        case s: String =>
+          cString(strEscape.foldLeft(s) { case (p, (c, r)) =>
+            p.replace(c, r)
+          })
+        case n: Double =>
+          cNum(n.toString)
+        case n: Float =>
+          cNum(n.toString)
+        case n: Int =>
+          cNum(n.toString)
+        case n: BigInt =>
+          cNum(n.toString)
+        case b: Boolean =>
+          cBool(b.toString)
+        case None =>
+          cNone
+        case Some(v) =>
+          cSome(thisDepth(v))
 
-      case b: Boolean =>
-        s"${Console.YELLOW + Console.BOLD}$b${Console.RESET}"
+        case j: JsValue =>
+          cJson(
+            Console.RESET +
+              Json
+                .prettyPrint(j)
+                .replaceAll("""("[^"]+")\s*:\s*""", s"${Console.GREEN}$$1${Console.RESET} -> ")
+                .replace("[ ]", s"${Console.BLUE}Vector()${Console.RESET}")
+                .replace("{ }", "Json.obj()")
+                .replaceAll("true", s"${Console.MAGENTA + Console.BOLD}true${Console.RESET}")
+                .replaceAll("false", s"${Console.MAGENTA + Console.BOLD}false${Console.RESET}")
+                .replaceAll(": (\\d+)", s": ${Console.CYAN}$$1${Console.RESET}")
+                .replaceAll("\\n(\\s*)", "\n" + indent + "$1")
+          )
 
-      case None =>
-        s"${Console.MAGENTA}None${Console.RESET}"
-
-      case Some(v) =>
-        s"${Console.MAGENTA}Some(${Console.RESET}${thisDepth(v)}${Console.MAGENTA})${Console.RESET}"
-
-      // For an empty Seq just use its normal String representation.
-      case xs: Seq[_] if xs.isEmpty =>
-        Console.BLUE + xs.toString() + Console.RESET
-
-      case xs: Seq[_] =>
-        val prefix = xs.getClass.getSimpleName
-        val resultOneLine =
-          cBraces(xs.map(nextDepth).mkString(s"${Console.BLUE}, ${Console.RESET}"), prefix, Console.BLUE)
-        if (resultOneLine.length <= maxElementWidth) {
-          return resultOneLine
-        }
-        // Otherwise, build it with newlines and proper field indents.
-        val result = xs.map(x => s"\n$fieldIndent${nextDepth(x)}").mkString(s"${Console.BLUE}, ${Console.RESET}")
-        cBraces(result.substring(0, result.length - 1) + "\n" + indent, prefix, Console.BLUE)
-
-      // Product should cover case classes.
-      case m: Map[_, _] =>
-        val format = (v: String) => s"${Console.CYAN}Map(${Console.RESET}$v${Console.CYAN})${Console.RESET}"
-        if (m.isEmpty) format("")
-        else {
-          val keyVal = m.map { case (k, v) =>
-            s"$fieldIndent${thisDepth(k)} ${Console.CYAN}->${Console.RESET} ${nextDepth(v)}"
+        case _: Seq[_] | _: Set[_] =>
+          val s = a.asInstanceOf[Iterable[_]]
+          val oneLine = cColl(clazz, s.map(nextDepth).mkString(cCollSep))
+          if (oneLine.length <= maxElementWidth) {
+            oneLine
+          } else if (s.size > 1) {
+            cColl(clazz, "\n" + s.map(x => fieldIndent + nextDepth(x)).mkString(cCollSep + "\n") + "\n" + indent)
+          } else {
+            cColl(clazz, s.map(x => thisDepth(x)).mkString(cCollSep))
           }
-          val resultOneLine = format(keyVal.mkString(s"${Console.CYAN},${Console.RESET} "))
-          if (resultOneLine.length <= maxElementWidth) return resultOneLine
-          format(s"\n${keyVal.mkString(s"${Console.CYAN},${Console.RESET}\n")}\n$indent")
-        }
 
-      case j: JsValue =>
-        cBraces(
-          prefix = "JsValue",
-          value = Json
-            .prettyPrint(j)
-            .replaceAll("""("[^"]+")\s*:\s*""", s"${Console.GREEN}$$1${Console.RESET} -> ")
-            .replace("[ ]", s"${Console.BLUE}Vector()${Console.RESET}")
-            .replace("{ }", "Json.obj()")
-            .replaceAll("true", s"${Console.MAGENTA + Console.BOLD}true${Console.RESET}")
-            .replaceAll("false", s"${Console.MAGENTA + Console.BOLD}true${Console.RESET}")
-            .replaceAll(": \\d+", s"${Console.CYAN}true${Console.RESET}")
-            .replaceAll("\\n(\\s*)", "\n" + indent + "$1")
-            .replaceAll("^\\{", "")
-            .replaceAll("\\}$", "")
-        )
-
-      case p: Product =>
-        val prefix = s"${Console.YELLOW}${p.productPrefix}${Console.RESET}"
-        // We'll use reflection to get the constructor arg names and values.
-        val cls = p.getClass
-        val fields = cls.getDeclaredFields.filterNot(_.isSynthetic).map(_.getName)
-        val values = p.productIterator.toSeq
-        // If we weren't able to match up fields/values, fall back to toString.
-        if (fields.length != values.length) {
-          return p.toString
-        }
-        fields.zip(values).toList match {
-          // If there are no fields, just use the normal String representation.
-          case Nil => p.toString
-          // If there is just one field, let's just print it as a wrapper.
-          case (_, value) :: Nil => s"$prefix${cBraces(thisDepth(value))}"
-          // If there is more than one field, build up the field names and values.
-          case kvps =>
-            val maxLenField = kvps.maxBy(_._1.length)
-            val aligned = kvps.map { case (k, v) =>
-              k.padTo(maxLenField._1.length, ' ') -> v
+        case m: Map[_, _] =>
+          val oneLine = cMap(
+            m.map { case (k, v) =>
+              cMapField(thisDepth(k)) + cMapEq() + nextDepth(v)
+            }.mkString(cMapSep)
+          )
+          if (oneLine.length <= maxElementWidth) {
+            oneLine
+          } else {
+            cMap(
+              "\n" +
+                m.map { case (k, v) =>
+                  fieldIndent + cMapField(nextDepth(k)) + cMapEq() + nextDepth(v)
+                }.mkString(cMapSep + "\n") + "\n" + indent
+            )
+          }
+        case mv: MapValues =>
+          mv.items
+            .map { case (k, v) =>
+              cMapField(nextDepth(k)) + cMapEq() + nextDepth(v)
             }
-            val prettyFields = aligned.map { case (k, v) =>
-              s"$fieldIndent${cField(k)} = ${nextDepth(v)}"
-            }
-            // If the result is not too long, pretty print on one line.
-            val resultOneLine = s"$prefix${cBraces(prettyFields.mkString(s"${Console.YELLOW},${Console.RESET} "))}"
-            if (resultOneLine.length <= maxElementWidth) return resultOneLine
-            // Otherwise, build it with newlines and proper field indents.
-            s"$prefix${cBraces(s"\n${prettyFields.mkString(s"${Console.YELLOW},${Console.RESET}\n")}\n$indent")}"
-        }
+            .mkString(cMapSep + "\n")
 
-      // If we haven't specialized this type, just use its toString.
-      case _ => a.toString
-    }
+        case p: Product =>
+          val fields = a.getClass.getDeclaredFields.filterNot(_.isSynthetic).map(_.getName)
+          val values = p.productIterator.toSeq
+          // If we weren't able to match up fields/values, fall back to toString.
+          if (fields.length != values.length) {
+            return p.toString
+          }
+          fields.zip(values).toList match {
+            // If there are no fields, just use the normal String representation.
+            case Nil =>
+              p.toString
+            // If there is just one field, let's just print it as a wrapper.
+            case (_, value) :: Nil =>
+              cClass(clazz, thisDepth(value))
+            // If there is more than one field, build up the field names and values.
+            case pairs =>
+              def formatPairsOneLine(pairs: Seq[(String, Any)]): String = pairs
+                .map { case (k, v) =>
+                  cClassField(k) + cClassEq(trim = true) + thisDepth(v)
+                }
+                .mkString(cClassSep)
+
+              def formatPairs(pairs: Seq[(String, Any)]): String = {
+                val max = pairs.maxBy(_._1.length)._1.length
+                pairs
+                  .map { case (k, v) =>
+                    fieldIndent + cClassField(k.padTo(max, ' ')) + cClassEq() + nextDepth(v)
+                  }
+                  .mkString(cClassSep + "\n")
+              }
+
+              val oneLine = cClass(clazz, formatPairsOneLine(pairs))
+              if (oneLine.length <= maxElementWidth) {
+                oneLine
+              } else {
+                cClass(clazz, "\n" + formatPairs(pairs) + "\n" + indent)
+              }
+          }
+
+        // If we haven't specialized this type, just use its toString.
+        case _ =>
+          Console.RESET + a.toString
+      }
+
+    if (depth == 0)
+      fmt + Console.RESET
+    else
+      fmt
   }
+
+  final private case class MapValues(items: Seq[(String, Any)])
 }
