@@ -33,20 +33,26 @@ prettyPrint(42)
 // it's just
 ytil.prettyPrint(42)
 ```
+I have a bunch of shortcuts in IDE to quickly summon every function:
+`ll` for `ytil.log()`, `pp` for `ytil.prettyPrint()`, `dd` for `ytil.prettyDiff()` and so on.
 
 ### Examples
 You can find all these examples in the [ExampleTest.scala](./src/test/scala/ytil/ExampleTest.scala).
 
 Note: each function also prints the line where it's used, and Intellij converts into a proper link. 
 ```scala
+// just a simple log-message (helpful for tracing)
 ytil.log(s"lorem ipsum")
 ```
 > ![log](./doc/screenshot/log.png)
 ```scala
+// pretty-prints any variable
+// the printed result is a valid Scala code, so it can be copy-pasted back to editor 
 ytil.prettyPrint(swagger)
 ```
 > ![log](./doc/screenshot/prettyPrint.png)
 ```scala
+// same as prettyPrint, but allows to print multiple variables as key-values
 ytil.prettyPrintMap(
   "foo" -> 42,
   "bar" -> false
@@ -54,18 +60,18 @@ ytil.prettyPrintMap(
 ```
 > ![log](./doc/screenshot/prettyPrintMap.png)
 ```scala
-// this functions is simple stupid - it just pretty-prints 2 values and then calculates the diff line by line
+// this functions is simple stupid - it just pretty-formats 2 values and then calculates the diff line by line
 ytil.prettyDiff(expected, actual)
 ```
 > ![log](./doc/screenshot/prettyDiff.png)
 ```scala
-// it's useful when I want to quickly trace a call-stack 
+// it's useful when I need to quickly trace a call-stack 
 ytil.trace(limit = 10)
 ```
 > ![log](./doc/screenshot/trace.png)
 ```scala
 // makes it easy to track sleep-calls
-// and also it does not let me to accidentally forget them and commit
+// and also it does not let me to forget about them and accidentally commit
 ytil.sleep(200)
 ```
 > ![log](./doc/screenshot/sleep.png)
