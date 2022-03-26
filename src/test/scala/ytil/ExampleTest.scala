@@ -41,7 +41,7 @@ class ExampleTest extends AnyWordSpec {
   )
 
   "log" in {
-    ytil.log(s"some log line")
+    ytil.log(s"lorem ipsum")
   }
 
   "prettyPrint" in {
@@ -56,6 +56,28 @@ class ExampleTest extends AnyWordSpec {
     )
   }
 
+  "prettyDiff" in {
+    val expected = swagger
+    val actual = swagger.copy(paths =
+      swagger.paths.view
+        .mapValues(
+          _.view
+            .mapValues(path => path.copy(responses = path.responses.view.mapValues(_.copy(description = None)).toMap))
+            .toMap
+        )
+        .toMap
+    )
+
+    ytil.prettyDiff(expected, actual)
+  }
+
+  "trace" in {
+    ytil.trace(limit = 10)
+  }
+
+  "sleep" in {
+    ytil.sleep(200)
+  }
 }
 
 final case class Swagger(paths: Map[Path, Map[Method, PathDef]])

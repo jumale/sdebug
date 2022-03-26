@@ -78,8 +78,8 @@ package object ytil {
           Seq(line)
         else
           Seq(
-            fA.map(s => Console.RED + "-" + s + Console.RESET),
-            fB.map(s => Console.GREEN + "-" + s + Console.RESET)
+            fA.map(s => Console.RED + Console.BOLD + "-" + s + Console.RESET),
+            fB.map(s => Console.GREEN + Console.BOLD + "+" + s + Console.RESET)
           ).flatten
       }
     val line = lineOfStack(2)
@@ -87,9 +87,9 @@ package object ytil {
     Console.println(diff.mkString("\n"))
   }
 
-  def trace(): Unit = {
+  def trace(limit: Int = Int.MaxValue): Unit = {
     Console.println(Console.BLACK + lineOfStack(2).asHeadLink + Console.RESET)
-    Console.println(fullStack.tail.tail.map(_.asLink).mkString("\n"))
+    Console.println(fullStack.tail.tail.map(_.asLink).take(limit).mkString("\n"))
   }
 
   def sleep(millis: Long): Unit = {
@@ -98,9 +98,9 @@ package object ytil {
     Thread.sleep(millis)
   }
 
-  def dump(v: Any, fileName: String): Unit = dumpBytes(v.toString.getBytes, fileName)
+  def save(v: Any, fileName: String): Unit = saveBytes(v.toString.getBytes, fileName)
 
-  def dumpBytes(v: Array[Byte], fileName: String): Unit = {
+  def saveBytes(v: Array[Byte], fileName: String): Unit = {
     import java.io._
     val target = new BufferedOutputStream(new FileOutputStream(s"target/$fileName"))
     try v.foreach(target.write(_))
@@ -112,20 +112,6 @@ package object ytil {
       s" [thread:${Thread.currentThread().getId}]"
     else
       ""
-
-  final case class Line(file: String, number: Int, prefix: String = "") {
-    override def toString: String =
-      s"${if (prefix.isEmpty)
-        ""
-      else
-        s"$prefix "}$file:$number"
-    def asLink: String = s"...($toString)"
-    def asHeadLink: String = s".....................($toString)....................."
-    def isEmpty: Boolean = this == Line.empty
-  }
-  object Line {
-    val empty: Line = Line("unknown", 0)
-  }
 
   def fullStack: Seq[Line] = (new Exception).getStackTrace.toSeq.map(s => Line(s.getFileName, s.getLineNumber))
 
@@ -226,18 +212,6 @@ package object ytil {
           cSome(thisDepth(v))
         case j: JsValue =>
           prettyFormatJson(j, indentSize, maxElementWidth - (depth * indentSize), depth)
-//          cJson(
-//            Console.RESET +
-//              Json
-//                .prettyPrint(j)
-//                .replaceAll("""("[^"]+")\s*:\s*""", s"${Console.GREEN}$$1${Console.RESET} -> ")
-//                .replace("[ ]", s"${Console.BLUE}Vector()${Console.RESET}")
-//                .replace("{ }", "Json.obj()")
-//                .replaceAll("true", s"${Console.MAGENTA + Console.BOLD}true${Console.RESET}")
-//                .replaceAll("false", s"${Console.MAGENTA + Console.BOLD}false${Console.RESET}")
-//                .replaceAll(": (\\d+)", s": ${Console.CYAN}$$1${Console.RESET}")
-//                .replaceAll("\\n(\\s*)", "\n" + indent + "$1")
-//          )
 
         case _: Seq[_] | _: Set[_] =>
           val s = a.asInstanceOf[Iterable[_]]
@@ -371,4 +345,19 @@ package object ytil {
   }
 
   final private case class MapValues(items: Seq[(String, Any)])
+
+  final case class Line(file: String, number: Int, prefix: String = "") {
+    override def toString: String =
+      s"${if (prefix.isEmpty)
+        ""
+      else
+        s"$prefix "}$file:$number"
+    def asLink: String = s"...($toString)"
+    def asHeadLink: String = s".....................($toString)....................."
+    def isEmpty: Boolean = this == Line.empty
+  }
+
+  object Line {
+    val empty: Line = Line("unknown", 0)
+  }
 }
