@@ -1,6 +1,7 @@
 import play.api.libs.json.{JsArray, JsBoolean, JsNumber, JsObject, JsString, JsValue, Json}
 
 import scala.annotation.tailrec
+import scala.reflect.internal.util.Origins.MultiLine
 
 package object ytil {
   private val printColorsQueue = Seq(
@@ -341,6 +342,185 @@ package object ytil {
         }
 
       case _ => "-- other --"
+    }
+  }
+
+  object Pretty {
+    val COLOR: Color = Color
+
+    def apply(a: Any, params: Params = Params()): Val = {
+      val next = apply(_, params.nextDepth)
+      a match {
+        case s: String       => StringVal(s, params)
+        case n: Double       => NumVal(n)
+        case n: Float        => NumVal(n)
+        case n: Int          => NumVal(n)
+        case n: BigInt       => NumVal(n)
+        case b: Boolean      => BoolVal(b)
+        case o: Option[_]    => OptionVal(o.map(next))
+        case e: Either[_, _] => EitherVal(e.map(next).left.map(next))
+        case s: Seq[_]       => CollectionVal(s.getClass.getName, s.map(next), params)
+        case s: Set[_]       => CollectionVal(s.getClass.getName, s.map(next), params)
+        case m: Map[_, _]    => MapVal("Map", m.map { case (k, v) => next(k) -> next(v) }, params)
+
+        case p: Product =>
+          val fields = a.getClass.getDeclaredFields.filterNot(_.isSynthetic).map(_.getName)
+          val values = p.productIterator.toSeq
+          // If we weren't able to match up fields/values, fall back to toString.
+          if (fields.length != values.length)
+            StringVal(p.toString, params)
+          else
+            ObjectVal(p.getClass.getSimpleName, fields.zip(values).map { case (k, v) => next(k) -> next(v) }, params)
+
+        case v => StringVal(v.toString, params)
+      }
+    }
+
+    final case class Params(depth: Int = 0, indentSize: Int = 2, maxWidth: Int = 120) {
+      lazy val indent: String = " " * depth * indentSize
+      lazy val leftBorder: Int = maxWidth - (depth * indentSize)
+      def nextDepth: Params = copy(depth = depth + 1)
+    }
+
+    trait Val {
+      def value: Any
+      def params: Params
+      def render: String
+
+      def flex(singleLine: => String, multiLine: => String): String = {
+        if (singleLine.length <= params.leftBorder)
+          singleLine
+        else
+          multiLine
+      }
+    }
+
+    trait NoParams { self: Val =>
+      val params: Params = Params()
+    }
+
+    private val strEscape = Seq("\n" -> "\\n", "\r" -> "\\r", "\t" -> "\\t", "\"" -> "\\\"")
+
+    final case class StringVal(value: String, params: Params) extends Val {
+      lazy val render: String = flex(
+        singleLine = wrap(escaped),
+        multiLine = wrap(escaped.split("(?<=\\G.{" + params.leftBorder + "})").mkString("\n"))
+      )
+      protected def wrap(s: String): String = COLOR.GREEN + "\"" + s + "\""
+      private lazy val escaped: String = strEscape.foldLeft(value) { case (p, (c, r)) => p.replace(c, r) }
+    }
+
+    final case class NumVal(value: Any) extends Val with NoParams {
+      lazy val render: String = COLOR.CYAN + value.toString
+    }
+
+    final case class BoolVal(value: Boolean) extends Val with NoParams {
+      lazy val render: String = COLOR.RED + COLOR.BOLD + value.toString + COLOR.RESET // to get rid of BOLD
+    }
+
+    final case class OptionVal(value: Option[Val]) extends Val with NoParams {
+      lazy val render: String = COLOR.MAGENTA + (value match {
+        case Some(v) => "Some(" + v.render + COLOR.MAGENTA + ")"
+        case None    => "None"
+      })
+    }
+
+    final case class EitherVal(value: Either[Val, Val]) extends Val with NoParams {
+      lazy val render: String = COLOR.MAGENTA + (value match {
+        case Left(v)  => "Left(" + v.render
+        case Right(v) => "Right(" + v.render
+      }) + COLOR.MAGENTA + ")"
+    }
+
+    final case class CollectionVal(name: String, value: Iterable[Val], params: Params) extends Val {
+      lazy val render: String = COLOR.BLUE + prettyName + "(" + inner + COLOR.BLUE + ")"
+
+      private lazy val inner: String = flex(
+        singleLine = value.map(_.render).mkString(", "),
+        multiLine = "\n" + value.map(v => params.nextDepth.indent + v.render).mkString(",\n") + "\n" + params.indent
+      )
+      private lazy val prettyName: String = name match {
+        case "scala.collection.immutable.$colon$colon" => "Seq"
+        case "scala.collection.immutable.Nil$"         => "Seq"
+        case "scala.collection.immutable.Vector1"      => "Vector"
+        case _                                         => name
+      }
+    }
+
+    trait KeyVal extends Val {
+      def name: String
+      def color: String
+      def sign: String
+      def value: Iterable[(Val, Val)]
+
+      def renderKey(k: Val): String = k.render
+      def renderVal(v: Val): String = v.render
+
+      protected lazy val fields: Iterable[(String, String)] =
+        value.map { case (k, v) => renderKey(k) -> renderVal(v) }
+
+      override lazy val render: String = color + name + "(" + inner + color + ")"
+
+      protected def inner: String = flex(
+        singleLine = fields.map { case (k, v) => k + color + sign.trim + v }.mkString(", "),
+        multiLine = "\n" + fields
+          .map { case (k, v) => params.nextDepth.indent + k + color + sign + v }
+          .mkString(",\n") + "\n" + params.indent
+      )
+    }
+
+    final case class MapVal(name: String, value: Iterable[(Val, Val)], params: Params) extends KeyVal {
+      val color: String = COLOR.CYAN
+      val sign: String = " -> "
+    }
+
+    final case class ObjectVal(name: String, value: Iterable[(Val, Val)], params: Params) extends KeyVal {
+      val color: String = COLOR.YELLOW
+      val sign: String = " = "
+      override def renderKey(k: Val): String = COLOR.RESET + k.value.toString
+
+      override protected def inner: String =
+        if (fields.size == 1)
+          fields.head._2
+        else
+          super.inner
+    }
+
+    trait Color {
+      def BLACK: String
+      def RED: String
+      def GREEN: String
+      def YELLOW: String
+      def BLUE: String
+      def MAGENTA: String
+      def CYAN: String
+      def WHITE: String
+      def BOLD: String
+      def RESET: String
+    }
+    object Color extends Color {
+      def BLACK: String = Console.BLACK
+      def RED: String = Console.RED
+      def GREEN: String = Console.GREEN
+      def YELLOW: String = Console.YELLOW
+      def BLUE: String = Console.BLUE
+      def MAGENTA: String = Console.MAGENTA
+      def CYAN: String = Console.CYAN
+      def WHITE: String = Console.WHITE
+      def BOLD: String = Console.BOLD
+      def RESET: String = Console.RESET
+    }
+    object TColor extends Color {
+      def BLACK: String = "[black]"
+      def RED: String = "[red]"
+      def GREEN: String = "[green]"
+      def YELLOW: String = "[yellow]"
+      def BLUE: String = "[blue]"
+      def MAGENTA: String = "[magenta]"
+      def CYAN: String = "[cyan]"
+      def WHITE: String = "[white]"
+      def BOLD: String = "[bold]"
+      def RESET: String = "[:]"
     }
   }
 

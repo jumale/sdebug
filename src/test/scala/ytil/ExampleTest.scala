@@ -78,6 +78,27 @@ class ExampleTest extends AnyWordSpec {
   "sleep" in {
     ytil.sleep(200)
   }
+
+  "Pretty" in {
+//    val p = ytil.Pretty(
+//      Map(
+//        "foo" -> Vector(Some(42), Right(true), None, Left("foo"), "a" * 60),
+//        Some("bar") -> Seq(1, 2, 3),
+//        Path("/a/b/c/d") -> PathDef()
+//      )
+//    )
+    println(ytil.Pretty(swagger).render)
+
+    println("-" * 50)
+    println(
+      ytil
+        .Pretty(
+          Node("root", Seq(Node("1" * 360, Seq(Node("2" * 360, Seq(Node("3" * 360, Seq(Node("4" * 360))))))))),
+          params = Pretty.Params(maxWidth = 50)
+        )
+        .render
+    )
+  }
 }
 
 final case class Swagger(paths: Map[Path, Map[Method, PathDef]])
@@ -119,3 +140,5 @@ object Parameter {
 }
 
 final case class Response(description: Option[String], schema: JsValue)
+
+final case class Node(name: String, children: Seq[Node] = Seq.empty)

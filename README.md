@@ -60,7 +60,7 @@ ytil.prettyPrintMap(
 ```
 > ![log](./doc/screenshot/prettyPrintMap.png)
 ```scala
-// this functions is simple stupid - it just pretty-formats 2 values and then calculates the diff line by line
+// this function is simple stupid - it just pretty-formats 2 values and then calculates the diff line by line
 ytil.prettyDiff(expected, actual)
 ```
 > ![log](./doc/screenshot/prettyDiff.png)
