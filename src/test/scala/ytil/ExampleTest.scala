@@ -1,7 +1,7 @@
 package ytil
 
 import org.scalatest.wordspec.AnyWordSpec
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.{JsNull, JsValue, Json}
 
 class ExampleTest extends AnyWordSpec {
   val swagger: Swagger = Swagger(
@@ -29,7 +29,8 @@ class ExampleTest extends AnyWordSpec {
                     "code" -> Json.obj("type" -> "integer", "example" -> 42),
                     "required" -> true,
                     "tags" -> Json.arr("foo", "bar"),
-                    "message" -> Json.obj("type" -> "string")
+                    "message" -> Json.obj("type" -> "string"),
+                    "xml" -> JsNull
                   )
                 )
               )
@@ -48,12 +49,8 @@ class ExampleTest extends AnyWordSpec {
     ytil.prettyPrint(swagger)
   }
 
-  "prettyPrintMap" in {
-    ytil.prettyPrintMap(
-      // key values
-      "foo" -> 42,
-      "bar" -> false
-    )
+  "prettyPrint exception" in {
+    ytil.prettyPrint(new NullPointerException("exception message"))
   }
 
   "prettyDiff" in {
@@ -77,27 +74,6 @@ class ExampleTest extends AnyWordSpec {
 
   "sleep" in {
     ytil.sleep(200)
-  }
-
-  "Pretty" in {
-//    val p = ytil.Pretty(
-//      Map(
-//        "foo" -> Vector(Some(42), Right(true), None, Left("foo"), "a" * 60),
-//        Some("bar") -> Seq(1, 2, 3),
-//        Path("/a/b/c/d") -> PathDef()
-//      )
-//    )
-    println(ytil.Pretty(swagger).render)
-
-    println("-" * 50)
-    println(
-      ytil
-        .Pretty(
-          Node("root", Seq(Node("1" * 360, Seq(Node("2" * 360, Seq(Node("3" * 360, Seq(Node("4" * 360))))))))),
-          params = Pretty.Params(maxWidth = 50)
-        )
-        .render
-    )
   }
 }
 
@@ -140,5 +116,3 @@ object Parameter {
 }
 
 final case class Response(description: Option[String], schema: JsValue)
-
-final case class Node(name: String, children: Seq[Node] = Seq.empty)

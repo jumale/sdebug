@@ -1,76 +1,26 @@
-import play.api.libs.json.{JsArray, JsBoolean, JsNumber, JsObject, JsString, JsValue, Json}
+import play.api.libs.json._
+import ytil.Pretty.Params
 
 import scala.annotation.tailrec
-import scala.reflect.internal.util.Origins.MultiLine
 
 package object ytil {
-  private val printColorsQueue = Seq(
-    Console.CYAN,
-    Console.GREEN,
-    Console.YELLOW,
-    Console.BLUE,
-    Console.MAGENTA,
-    Console.WHITE,
-    Console.RED,
-    Console.BLACK + Console.CYAN_B,
-    Console.WHITE + Console.GREEN_B,
-    Console.BLACK + Console.YELLOW_B,
-    Console.WHITE + Console.BLUE_B,
-    Console.WHITE + Console.MAGENTA_B,
-    Console.WHITE + Console.RED_B
-  )
-
-  private var usedColors: Map[String, String] = Map.empty
-  private var lastColorIndex: Int = -1
-  private def nextColorIndex: Int = {
-    lastColorIndex += 1
-    if (lastColorIndex >= printColorsQueue.length)
-      lastColorIndex = 0
-    lastColorIndex
-  }
-  private def nextColor(key: String): String = this.synchronized {
-    usedColors.getOrElse(
-      key, {
-        val color = printColorsQueue(nextColorIndex)
-        usedColors = usedColors.updated(key, color)
-        color
-      }
-    )
-  }
-
+  val COLOR: Color = Color.console
   val showThread: Boolean = true
 
   def log(msg: String): Unit = {
-    val line = lineOfStack(2)
-    val color = nextColor(line.toString)
-    Console.println(s"$color-> $msg${Console.RESET} ${Console.BLACK}${line.asLink}$thread${Console.RESET}")
+    val line = Stack.line(2)
+    Console.println(s"-> $msg${COLOR.RESET} ${COLOR.BLACK}${line.asLink}$thread${COLOR.RESET}")
   }
 
-  def prettyPrint(v: Any): Unit = prettyPrintImpl(v)
-  def prettyPrintMap(v: (String, Any)*): Unit = prettyPrintImpl(MapValues(v))
-  private def prettyPrintImpl(v: Any): Unit = {
-    val line = lineOfStack(3)
-    Console.println(Console.BLACK + line.asHeadLink + Console.RESET)
-    Console.println(prettyFormat(v))
-    v match {
-      case e: Throwable =>
-        Console.println(s"   ${Console.RED}error: ${Console.YELLOW}${e.getMessage}${Console.RESET}")
-        Console.println(s"   ${Console.RED}trace:")
-        e.getStackTrace
-          .foreach { se =>
-            val clazz = s"${Console.YELLOW}${se.getClassName}"
-            val method = se.getMethodName
-            val file = s"${Console.BLACK}${se.getFileName}:${se.getLineNumber}"
-            Console.println(s"    $clazz::$method($file)${Console.RESET}")
-          }
-      case _ =>
-        ()
-    }
+  def prettyPrint(v: Any, params: Params = Params()): Unit = {
+    val line = Stack.line(2)
+    Console.println(Console.BLACK + line.asHeadLink + COLOR.RESET)
+    Console.println(Pretty(v).render(params))
   }
 
   def prettyDiff(a: Any, b: Any): Unit = {
-    val prettyA = prettyFormat(a).split('\n')
-    val prettyB = prettyFormat(b).split('\n')
+    val prettyA = Pretty(a).render().split('\n')
+    val prettyB = Pretty(b).render().split('\n')
     val diff = prettyA.zipWithIndex
       .flatMap { case (line, idx) =>
         val fA = Option(line.replaceAll('\u001b'.toString + """\[\d+m""", ""))
@@ -79,23 +29,23 @@ package object ytil {
           Seq(line)
         else
           Seq(
-            fA.map(s => Console.RED + Console.BOLD + "-" + s + Console.RESET),
-            fB.map(s => Console.GREEN + Console.BOLD + "+" + s + Console.RESET)
+            fA.map(s => COLOR.RED + COLOR.BOLD + "-" + s + COLOR.RESET),
+            fB.map(s => COLOR.GREEN + COLOR.BOLD + "+" + s + COLOR.RESET)
           ).flatten
       }
-    val line = lineOfStack(2)
-    Console.println(Console.BLACK + line.asHeadLink + Console.RESET)
+    val line = Stack.line(2)
+    Console.println(COLOR.BLACK + line.asHeadLink + COLOR.RESET)
     Console.println(diff.mkString("\n"))
   }
 
   def trace(limit: Int = Int.MaxValue): Unit = {
-    Console.println(Console.BLACK + lineOfStack(2).asHeadLink + Console.RESET)
-    Console.println(fullStack.tail.tail.map(_.asLink).take(limit).mkString("\n"))
+    Console.println(COLOR.BLACK + Stack.line(2).asHeadLink + COLOR.RESET)
+    Console.println(Stack.full.tail.tail.map(_.asLink).take(limit).mkString("\n"))
   }
 
   def sleep(millis: Long): Unit = {
-    val line = lineOfStack(2)
-    Console.println(s"-> ⏱  ${millis}ms ${Console.BLACK}${line.asLink}$thread${Console.RESET}")
+    val line = Stack.line(2)
+    Console.println(s"-> ⏱  ${millis}ms ${COLOR.BLACK}${line.asLink}$thread${COLOR.RESET}")
     Thread.sleep(millis)
   }
 
@@ -114,331 +64,157 @@ package object ytil {
     else
       ""
 
-  def fullStack: Seq[Line] = (new Exception).getStackTrace.toSeq.map(s => Line(s.getFileName, s.getLineNumber))
-
-  def lineOfStack(n: Int): Line = (new Exception).getStackTrace
-    .lift(n)
-    .map(s => Line(s.getFileName, s.getLineNumber))
-    .getOrElse(Line.empty)
-
-  def catchLine(patterns: String*): Line = patterns
-    .collectFirst {
-      case pattern if !catchLineRec(pattern, 0).isEmpty =>
-        catchLineRec(pattern, 0)
-    }
-    .getOrElse(Line.empty)
-
-  @tailrec
-  private def catchLineRec(pattern: String, n: Int): Line = {
-    val c = lineOfStack(n)
-    if (c.isEmpty || c.file.matches(pattern))
-      c
-    else
-      catchLineRec(pattern, n + 1)
+  trait Color {
+    def BLACK: String
+    def RED: String
+    def GREEN: String
+    def YELLOW: String
+    def BLUE: String
+    def MAGENTA: String
+    def CYAN: String
+    def WHITE: String
+    def BOLD: String
+    def RESET: String
   }
 
-  /** Pretty formats a Scala value similar to its source representation. Particularly useful for case classes.
-    * @param a
-    *   - The value to pretty format.
-    * @param indentSize
-    *   - Number of spaces for each indent.
-    * @param maxElementWidth
-    *   - Largest element size before wrapping.
-    * @param depth
-    *   - Initial depth to pretty format indents.
-    * @return
-    */
-  def prettyFormat(a: Any, indentSize: Int = 2, maxElementWidth: Int = 120, depth: Int = 0): String = {
-    val indent = " " * depth * indentSize
-    val fieldIndent = indent + (" " * indentSize)
-    val thisDepth = prettyFormat(_: Any, indentSize, maxElementWidth, depth)
-    val nextDepth = prettyFormat(_: Any, indentSize, maxElementWidth, depth + 1)
-
-    def cString(content: String): String = Console.GREEN + "\"" + content + "\""
-    def cNum(content: String): String = Console.CYAN + content
-    def cClass(name: String, content: String): String = s"${Console.YELLOW}$name($content${Console.YELLOW})"
-    def cClassSep: String = Console.YELLOW + ", "
-    def cClassEq(trim: Boolean = false): String =
-      Console.YELLOW +
-        (if (trim)
-           "="
-         else
-           " = ")
-    def cClassField(name: String): String = Console.RESET + name
-    def cColl(name: String, content: String = ""): String = s"${Console.BLUE}$name($content${Console.BLUE})"
-    def cCollSep: String = Console.BLUE + ", "
-    def cJson(content: String): String = s"${Console.CYAN}JsValue($content${Console.CYAN})"
-    def cMap(content: String): String = s"${Console.CYAN}Map($content${Console.CYAN})"
-    def cMapSep: String = Console.CYAN + ", "
-    def cMapEq(trim: Boolean = false): String =
-      Console.CYAN +
-        (if (trim)
-           "->"
-         else
-           " -> ")
-    def cMapField(name: String): String = Console.RESET + name
-    def cNone: String = Console.MAGENTA + "None"
-    def cSome(content: String): String = s"${Console.MAGENTA}Some($content${Console.MAGENTA})"
-    def cBool(content: String = ""): String = Console.RED + Console.BOLD + content
-    lazy val strEscape = Seq("\n" -> "\\n", "\r" -> "\\r", "\t" -> "\\t", "\"" -> "\\\"")
-    lazy val clazz = {
-      a.getClass.getName match {
-        case "scala.collection.immutable.$colon$colon" => "Seq"
-        case "scala.collection.immutable.Nil$"         => "Seq"
-        case "scala.collection.immutable.Vector1"      => "Vector"
-        case _                                         => a.getClass.getSimpleName
-      }
+  object Color {
+    val console: Color = new Color {
+      val BLACK: String = Console.BLACK
+      val RED: String = Console.RED
+      val GREEN: String = Console.GREEN
+      val YELLOW: String = Console.YELLOW
+      val BLUE: String = Console.BLUE
+      val MAGENTA: String = Console.MAGENTA
+      val CYAN: String = Console.CYAN
+      val WHITE: String = Console.WHITE
+      val BOLD: String = Console.BOLD
+      val RESET: String = Console.RESET
     }
 
-    val fmt =
-      a match {
-        // Make Strings look similar to their literal form.
-        case s: String =>
-          cString(strEscape.foldLeft(s) { case (p, (c, r)) =>
-            p.replace(c, r)
-          })
-        case n: Double =>
-          cNum(n.toString)
-        case n: Float =>
-          cNum(n.toString)
-        case n: Int =>
-          cNum(n.toString)
-        case n: BigInt =>
-          cNum(n.toString)
-        case b: Boolean =>
-          cBool(b.toString)
-        case None =>
-          cNone
-        case Some(v) =>
-          cSome(thisDepth(v))
-        case j: JsValue =>
-          prettyFormatJson(j, indentSize, maxElementWidth - (depth * indentSize), depth)
-
-        case _: Seq[_] | _: Set[_] =>
-          val s = a.asInstanceOf[Iterable[_]]
-          val oneLine = cColl(clazz, s.map(nextDepth).mkString(cCollSep))
-          if (oneLine.length <= maxElementWidth) {
-            oneLine
-          } else if (s.size > 1) {
-            cColl(clazz, "\n" + s.map(x => fieldIndent + nextDepth(x)).mkString(cCollSep + "\n") + "\n" + indent)
-          } else {
-            cColl(clazz, s.map(x => thisDepth(x)).mkString(cCollSep))
-          }
-
-        case m: Map[_, _] =>
-          val oneLine = cMap(
-            m.map { case (k, v) =>
-              cMapField(thisDepth(k)) + cMapEq() + nextDepth(v)
-            }.mkString(cMapSep)
-          )
-          if (oneLine.length <= maxElementWidth) {
-            oneLine
-          } else {
-            cMap(
-              "\n" +
-                m.map { case (k, v) =>
-                  fieldIndent + cMapField(nextDepth(k)) + cMapEq() + nextDepth(v)
-                }.mkString(cMapSep + "\n") + "\n" + indent
-            )
-          }
-        case mv: MapValues =>
-          mv.items
-            .map { case (k, v) =>
-              cMapField(nextDepth(k)) + cMapEq() + nextDepth(v)
-            }
-            .mkString(cMapSep + "\n")
-            .replaceAll("^\n", "")
-
-        case p: Product =>
-          val fields = a.getClass.getDeclaredFields.filterNot(_.isSynthetic).map(_.getName)
-          val values = p.productIterator.toSeq
-          // If we weren't able to match up fields/values, fall back to toString.
-          if (fields.length != values.length) {
-            return p.toString
-          }
-          fields.zip(values).toList match {
-            // If there are no fields, just use the normal String representation.
-            case Nil =>
-              p.toString
-            // If there is just one field, let's just print it as a wrapper.
-            case (_, value) :: Nil =>
-              cClass(clazz, thisDepth(value))
-            // If there is more than one field, build up the field names and values.
-            case pairs =>
-              def formatPairsOneLine(pairs: Seq[(String, Any)]): String = pairs
-                .map { case (k, v) =>
-                  cClassField(k) + cClassEq(trim = true) + thisDepth(v)
-                }
-                .mkString(cClassSep)
-
-              def formatPairs(pairs: Seq[(String, Any)]): String = {
-                val max = pairs.maxBy(_._1.length)._1.length
-                pairs
-                  .map { case (k, v) =>
-                    fieldIndent + cClassField(k.padTo(max, ' ')) + cClassEq() + nextDepth(v)
-                  }
-                  .mkString(cClassSep + "\n")
-              }
-
-              val oneLine = cClass(clazz, formatPairsOneLine(pairs))
-              if (oneLine.length <= maxElementWidth) {
-                oneLine
-              } else {
-                cClass(clazz, "\n" + formatPairs(pairs) + "\n" + indent)
-              }
-          }
-
-        // If we haven't specialized this type, just use its toString.
-        case _ =>
-          Console.RESET + a.toString
-      }
-
-    if (depth == 0)
-      fmt + Console.RESET
-    else
-      fmt
-  }
-
-  def prettyFormatJson(a: JsValue, indentSize: Int = 2, maxElementWidth: Int = 120, depth: Int = 1): String = {
-    val indent = " " * depth * indentSize
-    val fieldIndent = indent + (" " * indentSize)
-    val thisDepth = prettyFormatJson(_: JsValue, indentSize, maxElementWidth, depth)
-    val nextDepth = prettyFormatJson(_: JsValue, indentSize, maxElementWidth, depth + 1)
-
-    a match {
-      case s: JsString =>
-        Console.GREEN + '"' + s.value + '"'
-
-      case n: JsNumber =>
-        Console.CYAN + n.value
-
-      case b: JsBoolean =>
-        Console.RED + Console.BOLD + b.value + Console.RESET
-
-      case obj: JsObject =>
-        val prefix = s"${Console.YELLOW}Json.obj(${Console.RESET}"
-        val suffix = s"${Console.YELLOW})${Console.RESET}"
-        val fields = obj.fields.map { case (field, value) =>
-          Console.GREEN + nextDepth(JsString(field)) + " -> " + nextDepth(value)
-        }
-        val oneLine = prefix + fields.mkString(", ") + suffix
-        if (oneLine.length <= maxElementWidth) {
-          oneLine
-        } else {
-          prefix + "\n" + fieldIndent + fields.mkString(s",\n$fieldIndent") + "\n" + indent + suffix
-        }
-
-      case arr: JsArray =>
-        val prefix = s"${Console.BLUE}Json.arr(${Console.RESET}"
-        val suffix = s"${Console.BLUE})${Console.RESET}"
-        val elements = arr.value.map { value =>
-          nextDepth(value)
-        }
-        val oneLine = prefix + elements.mkString(", ") + suffix
-        if (oneLine.length <= maxElementWidth) {
-          oneLine
-        } else {
-          prefix + "\n" + fieldIndent + elements.mkString(s",\n$fieldIndent") + "\n" + indent + suffix
-        }
-
-      case _ => "-- other --"
+    val debug: Color = new Color {
+      val BLACK: String = "[black]"
+      val RED: String = "[red]"
+      val GREEN: String = "[green]"
+      val YELLOW: String = "[yellow]"
+      val BLUE: String = "[blue]"
+      val MAGENTA: String = "[magenta]"
+      val CYAN: String = "[cyan]"
+      val WHITE: String = "[white]"
+      val BOLD: String = "[bold]"
+      val RESET: String = "[:]"
     }
   }
 
   object Pretty {
-    val COLOR: Color = Color
-
-    def apply(a: Any, params: Params = Params()): Val = {
-      val next = apply(_, params.nextDepth)
+    def apply(a: Any): Val = {
       a match {
-        case s: String       => StringVal(s, params)
+        case s: String       => StringVal(s)
         case n: Double       => NumVal(n)
         case n: Float        => NumVal(n)
         case n: Int          => NumVal(n)
         case n: BigInt       => NumVal(n)
         case b: Boolean      => BoolVal(b)
-        case o: Option[_]    => OptionVal(o.map(next))
-        case e: Either[_, _] => EitherVal(e.map(next).left.map(next))
-        case s: Seq[_]       => CollectionVal(s.getClass.getName, s.map(next), params)
-        case s: Set[_]       => CollectionVal(s.getClass.getName, s.map(next), params)
-        case m: Map[_, _]    => MapVal("Map", m.map { case (k, v) => next(k) -> next(v) }, params)
+        case o: Option[_]    => OptionVal(o.map(apply))
+        case e: Either[_, _] => EitherVal(e.map(apply).left.map(apply))
+        case s: Seq[_]       => CollectionVal(s.getClass.getName, s.map(apply))
+        case s: Set[_]       => CollectionVal(s.getClass.getName, s.map(apply))
+        case m: Map[_, _]    => MapVal("Map", m.map { case (k, v) => apply(k) -> apply(v) })
+        case e: Throwable    => ErrorVal(e)
+        case JsNull          => NullVal
+        case s: JsString     => StringVal(s.value)
+        case n: JsNumber     => NumVal(n.value)
+        case b: JsBoolean    => BoolVal(b.value)
+        case a: JsArray      => CollectionVal("Json.arr", a.value.map(apply))
+        case o: JsObject     => MapVal("Json.obj", o.fields.map { case (k, v) => StringVal(k) -> apply(v) })
 
         case p: Product =>
           val fields = a.getClass.getDeclaredFields.filterNot(_.isSynthetic).map(_.getName)
           val values = p.productIterator.toSeq
-          // If we weren't able to match up fields/values, fall back to toString.
           if (fields.length != values.length)
-            StringVal(p.toString, params)
+            RawVal(p) // If we weren't able to match up fields/values, fall back to toString.
           else
-            ObjectVal(p.getClass.getSimpleName, fields.zip(values).map { case (k, v) => next(k) -> next(v) }, params)
+            ObjectVal(p.getClass.getSimpleName, fields.zip(values).map { case (k, v) => apply(k) -> apply(v) })
 
-        case v => StringVal(v.toString, params)
+        case v => StringVal(v.toString)
       }
     }
 
-    final case class Params(depth: Int = 0, indentSize: Int = 2, maxWidth: Int = 120) {
+    final case class Params(depth: Int = 0, indentSize: Int = 2, maxWidth: Int = 120, stackLimit: Int = 10) {
       lazy val indent: String = " " * depth * indentSize
-      lazy val leftBorder: Int = maxWidth - (depth * indentSize)
+      lazy val fieldIndent: String = indent + (" " * indentSize)
+      lazy val rightBorder: Int = maxWidth - (depth * indentSize)
       def nextDepth: Params = copy(depth = depth + 1)
     }
 
     trait Val {
       def value: Any
-      def params: Params
-      def render: String
+      def render(p: Params = Params()): String
 
-      def flex(singleLine: => String, multiLine: => String): String = {
-        if (singleLine.length <= params.leftBorder)
+      def flex(p: Params)(singleLine: => String, multiLine: => String): String = {
+        if (singleLine.length <= p.rightBorder)
           singleLine
         else
           multiLine
       }
     }
 
-    trait NoParams { self: Val =>
-      val params: Params = Params()
-    }
-
     private val strEscape = Seq("\n" -> "\\n", "\r" -> "\\r", "\t" -> "\\t", "\"" -> "\\\"")
 
-    final case class StringVal(value: String, params: Params) extends Val {
-      lazy val render: String = flex(
-        singleLine = wrap(escaped),
-        multiLine = wrap(escaped.split("(?<=\\G.{" + params.leftBorder + "})").mkString("\n"))
-      )
+    final case class RawVal(value: Any) extends Val {
+      def render(p: Params): String = value.toString
+    }
+
+    final case class StringVal(value: String) extends Val {
+      def render(p: Params): String = wrap(escaped)
       protected def wrap(s: String): String = COLOR.GREEN + "\"" + s + "\""
       private lazy val escaped: String = strEscape.foldLeft(value) { case (p, (c, r)) => p.replace(c, r) }
     }
 
-    final case class NumVal(value: Any) extends Val with NoParams {
-      lazy val render: String = COLOR.CYAN + value.toString
+    final case class NumVal(value: Any) extends Val {
+      def render(p: Params): String = COLOR.CYAN + value.toString
     }
 
-    final case class BoolVal(value: Boolean) extends Val with NoParams {
-      lazy val render: String = COLOR.RED + COLOR.BOLD + value.toString + COLOR.RESET // to get rid of BOLD
+    final case class BoolVal(value: Boolean) extends Val {
+      def render(p: Params): String = COLOR.RED + value.toString
     }
 
-    final case class OptionVal(value: Option[Val]) extends Val with NoParams {
-      lazy val render: String = COLOR.MAGENTA + (value match {
-        case Some(v) => "Some(" + v.render + COLOR.MAGENTA + ")"
+    object NullVal extends Val {
+      override def value: Any = null
+      def render(p: Params): String = COLOR.RED + COLOR.BOLD + "null" + COLOR.RESET // to get rid of BOLD
+    }
+
+    final case class OptionVal(value: Option[Val]) extends Val {
+      def render(p: Params): String = COLOR.MAGENTA + (value match {
+        case Some(v) => "Some(" + v.render(p) + COLOR.MAGENTA + ")"
         case None    => "None"
       })
     }
 
-    final case class EitherVal(value: Either[Val, Val]) extends Val with NoParams {
-      lazy val render: String = COLOR.MAGENTA + (value match {
-        case Left(v)  => "Left(" + v.render
-        case Right(v) => "Right(" + v.render
+    final case class EitherVal(value: Either[Val, Val]) extends Val {
+      def render(p: Params): String = COLOR.MAGENTA + (value match {
+        case Left(v)  => "Left(" + v.render(p)
+        case Right(v) => "Right(" + v.render(p)
       }) + COLOR.MAGENTA + ")"
     }
 
-    final case class CollectionVal(name: String, value: Iterable[Val], params: Params) extends Val {
-      lazy val render: String = COLOR.BLUE + prettyName + "(" + inner + COLOR.BLUE + ")"
+    final case class CollectionVal(name: String, value: Iterable[Val]) extends Val {
+      def render(p: Params): String = {
+        val oneLine = open + value.map(_.render(p.nextDepth)).mkString(sep) + close
+        if (oneLine.length <= p.rightBorder) {
+          oneLine
+        } else if (value.size > 1) {
+          open + "\n" + value
+            .map(x => p.fieldIndent + x.render(p.nextDepth))
+            .mkString(sep + "\n") + "\n" + p.indent + close
+        } else {
+          open + value.map(x => x.render(p)).mkString(sep) + close
+        }
+      }
 
-      private lazy val inner: String = flex(
-        singleLine = value.map(_.render).mkString(", "),
-        multiLine = "\n" + value.map(v => params.nextDepth.indent + v.render).mkString(",\n") + "\n" + params.indent
-      )
+      protected lazy val color: String = COLOR.BLUE
+      protected lazy val open: String = color + prettyName + "("
+      protected lazy val close: String = color + ")"
+      protected lazy val sep: String = color + ", "
       private lazy val prettyName: String = name match {
         case "scala.collection.immutable.$colon$colon" => "Seq"
         case "scala.collection.immutable.Nil$"         => "Seq"
@@ -449,95 +225,110 @@ package object ytil {
 
     trait KeyVal extends Val {
       def name: String
-      def color: String
-      def sign: String
       def value: Iterable[(Val, Val)]
 
-      def renderKey(k: Val): String = k.render
-      def renderVal(v: Val): String = v.render
+      def render(p: Params): String = {
+        val oneLine = open + fieldsOneLine(p) + close
+        if (oneLine.length <= p.rightBorder) {
+          oneLine
+        } else {
+          open + "\n" + fieldsMultiLine(p) + "\n" + p.indent + close
+        }
+      }
 
-      protected lazy val fields: Iterable[(String, String)] =
-        value.map { case (k, v) => renderKey(k) -> renderVal(v) }
+      protected lazy val color: String = COLOR.YELLOW
+      protected lazy val open: String = s"$color$name("
+      protected lazy val close: String = color + ")"
+      protected lazy val sep: String = color + ", "
+      protected lazy val eq: String = color + "="
 
-      override lazy val render: String = color + name + "(" + inner + color + ")"
+      protected def renderFields[T](kp: Params, vp: Params)(fn: ((String, String)) => T): Iterable[T] =
+        value.map(f => fn(f._1.render(kp) -> f._2.render(vp)))
 
-      protected def inner: String = flex(
-        singleLine = fields.map { case (k, v) => k + color + sign.trim + v }.mkString(", "),
-        multiLine = "\n" + fields
-          .map { case (k, v) => params.nextDepth.indent + k + color + sign + v }
-          .mkString(",\n") + "\n" + params.indent
-      )
+      protected def fieldsOneLine(p: Params): String =
+        renderFields(p, p) { case (k, v) => k + s" $eq " + v }.mkString(sep)
+
+      protected def fieldsMultiLine(p: Params): String = {
+        val pairs = renderFields(p, p.nextDepth)(v => v)
+        val max = pairs.maxBy(_._1.length)._1.length
+        pairs
+          .map { case (k, v) => p.fieldIndent + k.padTo(max, ' ') + s" $eq " + v }
+          .mkString(sep + "\n")
+      }
     }
 
-    final case class MapVal(name: String, value: Iterable[(Val, Val)], params: Params) extends KeyVal {
-      val color: String = COLOR.CYAN
-      val sign: String = " -> "
+    final case class MapVal(name: String, value: Iterable[(Val, Val)]) extends KeyVal {
+      override lazy val color: String = COLOR.CYAN
+      override lazy val eq: String = COLOR.RESET + "->"
     }
 
-    final case class ObjectVal(name: String, value: Iterable[(Val, Val)], params: Params) extends KeyVal {
-      val color: String = COLOR.YELLOW
-      val sign: String = " = "
-      override def renderKey(k: Val): String = COLOR.RESET + k.value.toString
+    final case class ObjectVal(name: String, value: Iterable[(Val, Val)]) extends KeyVal {
+      override protected def renderFields[T](kp: Params, vp: Params)(fn: ((String, String)) => T): Iterable[T] =
+        value.map(f => fn(COLOR.RESET + f._1.value.toString -> f._2.render(vp)))
 
-      override protected def inner: String =
-        if (fields.size == 1)
-          fields.head._2
+      override def render(p: Params): String =
+        if (value.size == 1)
+          open + renderFields(p, p)(_._2).head + close
         else
-          super.inner
+          super.render(p)
     }
 
-    trait Color {
-      def BLACK: String
-      def RED: String
-      def GREEN: String
-      def YELLOW: String
-      def BLUE: String
-      def MAGENTA: String
-      def CYAN: String
-      def WHITE: String
-      def BOLD: String
-      def RESET: String
-    }
-    object Color extends Color {
-      def BLACK: String = Console.BLACK
-      def RED: String = Console.RED
-      def GREEN: String = Console.GREEN
-      def YELLOW: String = Console.YELLOW
-      def BLUE: String = Console.BLUE
-      def MAGENTA: String = Console.MAGENTA
-      def CYAN: String = Console.CYAN
-      def WHITE: String = Console.WHITE
-      def BOLD: String = Console.BOLD
-      def RESET: String = Console.RESET
-    }
-    object TColor extends Color {
-      def BLACK: String = "[black]"
-      def RED: String = "[red]"
-      def GREEN: String = "[green]"
-      def YELLOW: String = "[yellow]"
-      def BLUE: String = "[blue]"
-      def MAGENTA: String = "[magenta]"
-      def CYAN: String = "[cyan]"
-      def WHITE: String = "[white]"
-      def BOLD: String = "[bold]"
-      def RESET: String = "[:]"
+    final case class ErrorVal(value: Throwable) extends Val {
+      override def render(p: Params): String =
+        open + "\n    " + COLOR.YELLOW + value.getMessage + "\n" +
+          stack.take(p.stackLimit).mkString("\n") + "\n" + p.indent + close
+
+      protected lazy val name: String = value.getClass.getSimpleName
+      protected lazy val open: String = COLOR.RED + COLOR.BOLD + name + "(" + COLOR.RESET
+      protected lazy val close: String = COLOR.RED + COLOR.BOLD + ")" + COLOR.RESET
+      protected lazy val stack: Seq[String] =
+        value.getStackTrace
+          .map { se =>
+            val clazz = COLOR.CYAN + se.getClassName
+            val method = se.getMethodName
+            val file = se.getFileName + ":" + se.getLineNumber
+            s"    $clazz::$method${COLOR.BLACK}($file)${COLOR.RESET}"
+          }
     }
   }
 
-  final private case class MapValues(items: Seq[(String, Any)])
+  object Stack {
+    def full: Seq[Line] = (new Exception).getStackTrace.toSeq.map(s => Line(s.getFileName, s.getLineNumber))
 
-  final case class Line(file: String, number: Int, prefix: String = "") {
-    override def toString: String =
-      s"${if (prefix.isEmpty)
-        ""
+    def line(n: Int): Line = (new Exception).getStackTrace
+      .lift(n)
+      .map(s => Line(s.getFileName, s.getLineNumber))
+      .getOrElse(Line.empty)
+
+    def catchLine(patterns: String*): Line = patterns
+      .collectFirst {
+        case pattern if !catchLineRec(pattern, 0).isEmpty =>
+          catchLineRec(pattern, 0)
+      }
+      .getOrElse(Line.empty)
+
+    @tailrec
+    private def catchLineRec(pattern: String, n: Int): Line = {
+      val c = line(n)
+      if (c.isEmpty || c.file.matches(pattern))
+        c
       else
-        s"$prefix "}$file:$number"
-    def asLink: String = s"...($toString)"
-    def asHeadLink: String = s".....................($toString)....................."
-    def isEmpty: Boolean = this == Line.empty
-  }
+        catchLineRec(pattern, n + 1)
+    }
 
-  object Line {
-    val empty: Line = Line("unknown", 0)
+    final case class Line(file: String, number: Int, prefix: String = "") {
+      override def toString: String =
+        s"${if (prefix.isEmpty)
+          ""
+        else
+          s"$prefix "}$file:$number"
+      def asLink: String = s"...($toString)"
+      def asHeadLink: String = s".....................($toString)....................."
+      def isEmpty: Boolean = this == Line.empty
+    }
+
+    object Line {
+      val empty: Line = Line("unknown", 0)
+    }
   }
 }

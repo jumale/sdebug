@@ -44,21 +44,19 @@ Note: each function also prints the line where it's used, and Intellij converts 
 // just a simple log-message (helpful for tracing)
 ytil.log(s"lorem ipsum")
 ```
-> ![log](./doc/screenshot/log.png)
+![log](./doc/screenshot/log.png)
 ```scala
 // pretty-prints any variable
 // the printed result is a valid Scala code, so it can be copy-pasted back to editor 
 ytil.prettyPrint(swagger)
 ```
-> ![log](./doc/screenshot/prettyPrint.png)
+![log](./doc/screenshot/prettyPrint.png)
 ```scala
-// same as prettyPrint, but allows to print multiple variables as key-values
-ytil.prettyPrintMap(
-  "foo" -> 42,
-  "bar" -> false
-)
+// exceptions are printed with stack-trace
+// the stack-trace length is limited to 10 by default but it can be changed via render-params 
+ytil.prettyPrint(swagger)
 ```
-> ![log](./doc/screenshot/prettyPrintMap.png)
+![log](./doc/screenshot/prettyPrintException.png)
 ```scala
 // this function is simple stupid - it just pretty-formats 2 values and then calculates the diff line by line
 ytil.prettyDiff(expected, actual)
