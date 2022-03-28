@@ -282,7 +282,7 @@ package object ytil {
       protected lazy val open: String = COLOR.RED + COLOR.BOLD + name + "(" + COLOR.RESET
       protected lazy val close: String = COLOR.RED + COLOR.BOLD + ")" + COLOR.RESET
       protected lazy val stack: Seq[String] =
-        value.getStackTrace
+        value.getStackTrace.toIndexedSeq
           .map { se =>
             val clazz = COLOR.CYAN + se.getClassName
             val method = se.getMethodName
