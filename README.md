@@ -61,15 +61,15 @@ ytil.prettyPrint(swagger)
 // this function is simple stupid - it just pretty-formats 2 values and then calculates the diff line by line
 ytil.prettyDiff(expected, actual)
 ```
-> ![log](./doc/screenshot/prettyDiff.png)
+![log](./doc/screenshot/prettyDiff.png)
 ```scala
 // it's useful when I need to quickly trace a call-stack 
 ytil.trace(limit = 10)
 ```
-> ![log](./doc/screenshot/trace.png)
+![log](./doc/screenshot/trace.png)
 ```scala
 // makes it easy to track sleep-calls
 // and also it does not let me to forget about them and accidentally commit
 ytil.sleep(200)
 ```
-> ![log](./doc/screenshot/sleep.png)
+![log](./doc/screenshot/sleep.png)
