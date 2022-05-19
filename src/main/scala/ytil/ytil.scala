@@ -4,7 +4,7 @@ import ytil.Pretty.Params
 import scala.annotation.tailrec
 
 package object ytil {
-  val COLOR: Color        = Color.console
+  val COLOR: Color = Color.console
   val showThread: Boolean = true
 
   def log(msg: String): Unit = {
@@ -18,9 +18,9 @@ package object ytil {
     Console.println(Pretty(v).render(params) + COLOR.RESET)
   }
 
-  def prettyDiff(a: Any, b: Any): Unit = {
-    val prettyA = Pretty(a).render().split('\n')
-    val prettyB = Pretty(b).render().split('\n')
+  def prettyDiff(a: Any, b: Any, params: Params = Params()): Unit = {
+    val prettyA = Pretty(a).render(params).split('\n')
+    val prettyB = Pretty(b).render(params).split('\n')
     val diff = prettyA.zipWithIndex
       .flatMap { case (line, idx) =>
         val fA = Option(line.replaceAll('\u001b'.toString + """\[\d+m""", ""))
@@ -79,29 +79,29 @@ package object ytil {
 
   object Color {
     val console: Color = new Color {
-      val BLACK: String   = Console.BLACK
-      val RED: String     = Console.RED
-      val GREEN: String   = Console.GREEN
-      val YELLOW: String  = Console.YELLOW
-      val BLUE: String    = Console.BLUE
+      val BLACK: String = Console.BLACK
+      val RED: String = Console.RED
+      val GREEN: String = Console.GREEN
+      val YELLOW: String = Console.YELLOW
+      val BLUE: String = Console.BLUE
       val MAGENTA: String = Console.MAGENTA
-      val CYAN: String    = Console.CYAN
-      val WHITE: String   = Console.WHITE
-      val BOLD: String    = Console.BOLD
-      val RESET: String   = Console.RESET
+      val CYAN: String = Console.CYAN
+      val WHITE: String = Console.WHITE
+      val BOLD: String = Console.BOLD
+      val RESET: String = Console.RESET
     }
 
     val debug: Color = new Color {
-      val BLACK: String   = "[black]"
-      val RED: String     = "[red]"
-      val GREEN: String   = "[green]"
-      val YELLOW: String  = "[yellow]"
-      val BLUE: String    = "[blue]"
+      val BLACK: String = "[black]"
+      val RED: String = "[red]"
+      val GREEN: String = "[green]"
+      val YELLOW: String = "[yellow]"
+      val BLUE: String = "[blue]"
       val MAGENTA: String = "[magenta]"
-      val CYAN: String    = "[cyan]"
-      val WHITE: String   = "[white]"
-      val BOLD: String    = "[bold]"
-      val RESET: String   = "[:]"
+      val CYAN: String = "[cyan]"
+      val WHITE: String = "[white]"
+      val BOLD: String = "[bold]"
+      val RESET: String = "[:]"
     }
   }
 
@@ -142,10 +142,10 @@ package object ytil {
     }
 
     final case class Params(depth: Int = 0, indentSize: Int = 2, maxWidth: Int = 120, stackLimit: Int = 10) {
-      lazy val indent: String      = " " * depth * indentSize
+      lazy val indent: String = " " * depth * indentSize
       lazy val fieldIndent: String = indent + (" " * indentSize)
-      lazy val rightBorder: Int    = maxWidth - (depth * indentSize)
-      def nextDepth: Params        = copy(depth = depth + 1)
+      lazy val rightBorder: Int = maxWidth - (depth * indentSize)
+      def nextDepth: Params = copy(depth = depth + 1)
     }
 
     trait Val {
@@ -167,9 +167,9 @@ package object ytil {
     }
 
     final case class StringVal(value: String) extends Val {
-      def render(p: Params): String         = wrap(escaped)
+      def render(p: Params): String = wrap(escaped)
       protected def wrap(s: String): String = COLOR.GREEN + "\"" + s + "\""
-      private lazy val escaped: String      = strEscape.foldLeft(value) { case (p, (c, r)) => p.replace(c, r) }
+      private lazy val escaped: String = strEscape.foldLeft(value) { case (p, (c, r)) => p.replace(c, r) }
     }
 
     final case class NumVal(value: Any) extends Val {
@@ -181,7 +181,7 @@ package object ytil {
     }
 
     object NullVal extends Val {
-      override def value: Any       = null
+      override def value: Any = null
       def render(p: Params): String = COLOR.RED + COLOR.BOLD + "null" + COLOR.RESET // to get rid of BOLD
     }
 
@@ -213,9 +213,9 @@ package object ytil {
         }
       }
 
-      protected lazy val open: String  = color + prettyName + "("
+      protected lazy val open: String = color + prettyName + "("
       protected lazy val close: String = color + ")"
-      protected lazy val sep: String   = color + ", "
+      protected lazy val sep: String = color + ", "
       private lazy val prettyName: String = name match {
         case "scala.collection.immutable.$colon$colon" => "Seq"
         case "scala.collection.immutable.Nil$"         => "Seq"
@@ -237,11 +237,11 @@ package object ytil {
         }
       }
 
-      protected lazy val color: String = COLOR.YELLOW
-      protected lazy val open: String  = s"$color$name("
+      protected def color: String = COLOR.YELLOW
+      protected lazy val open: String = s"$color$name("
       protected lazy val close: String = color + ")"
-      protected lazy val sep: String   = color + ", "
-      protected lazy val eq: String    = color + "="
+      protected lazy val sep: String = color + ", "
+      protected lazy val eq: String = color + "="
 
       protected def renderFields[T](kp: Params, vp: Params)(fn: ((String, String)) => T): Iterable[T] =
         value.map(f => fn(f._1.render(kp) -> f._2.render(vp)))
@@ -251,16 +251,16 @@ package object ytil {
 
       protected def fieldsMultiLine(p: Params): String = {
         val pairs = renderFields(p, p.nextDepth)(v => v)
-        val max   = pairs.maxBy(_._1.length)._1.length
+        val max = pairs.maxBy(_._1.length)._1.length
         pairs
           .map { case (k, v) => p.fieldIndent + k.padTo(max, ' ') + s" $eq " + v }
           .mkString(sep + "\n")
       }
     }
 
-    final case class MapVal(name: String, value: Iterable[(Val, Val)]) extends KeyVal {
-      override lazy val color: String = COLOR.CYAN
-      override lazy val eq: String    = COLOR.RESET + "->"
+    final case class MapVal(name: String, value: Iterable[(Val, Val)], override val color: String = COLOR.CYAN)
+        extends KeyVal {
+      override lazy val eq: String = COLOR.RESET + "->"
     }
 
     final case class ObjectVal(name: String, value: Iterable[(Val, Val)]) extends KeyVal {
@@ -279,15 +279,15 @@ package object ytil {
         open + "\n    " + COLOR.YELLOW + value.getMessage + "\n" +
           stack.take(p.stackLimit).mkString("\n") + "\n" + p.indent + close
 
-      protected lazy val name: String  = value.getClass.getSimpleName
-      protected lazy val open: String  = COLOR.RED + COLOR.BOLD + name + "(" + COLOR.RESET
+      protected lazy val name: String = value.getClass.getSimpleName
+      protected lazy val open: String = COLOR.RED + COLOR.BOLD + name + "(" + COLOR.RESET
       protected lazy val close: String = COLOR.RED + COLOR.BOLD + ")" + COLOR.RESET
       protected lazy val stack: Seq[String] =
         value.getStackTrace.toIndexedSeq
           .map { se =>
-            val clazz  = COLOR.CYAN + se.getClassName
+            val clazz = COLOR.CYAN + se.getClassName
             val method = se.getMethodName
-            val file   = se.getFileName + ":" + se.getLineNumber
+            val file = se.getFileName + ":" + se.getLineNumber
             s"    $clazz::$method${COLOR.BLACK}($file)${COLOR.RESET}"
           }
     }
@@ -320,12 +320,12 @@ package object ytil {
     final case class Line(file: String, number: Int, prefix: String = "") {
       override def toString: String =
         s"${if (prefix.isEmpty)
-            ""
-          else
-            s"$prefix "}$file:$number"
-      def asLink: String     = s"...($toString)"
+          ""
+        else
+          s"$prefix "}$file:$number"
+      def asLink: String = s"...($toString)"
       def asHeadLink: String = s".....................($toString)....................."
-      def isEmpty: Boolean   = this == Line.empty
+      def isEmpty: Boolean = this == Line.empty
     }
 
     object Line {
