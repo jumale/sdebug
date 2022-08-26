@@ -1,9 +1,12 @@
-package ytil
+package com.github.jumale.sdebug
 
+import com.github.jumale.sdebug.playjson.DebugJson
 import org.scalatest.wordspec.AnyWordSpec
-import play.api.libs.json.{JsNull, JsValue, Json}
+import play.api.libs.json.{JsArray, JsNull, JsObject, JsString, JsValue, Json}
 
-class ExampleTest extends AnyWordSpec {
+class PetStoreExample extends AnyWordSpec {
+  val debug: Debugger = DebugJson()
+
   val swagger: Swagger = Swagger(
     Map(
       Path("/pet/{petId}/uploadImage") -> Map(
@@ -41,39 +44,41 @@ class ExampleTest extends AnyWordSpec {
     )
   )
 
-  "log" in {
-    ytil.log(s"lorem ipsum")
+  "print" in {
+    debug(swagger)
   }
 
-  "prettyPrint" in {
-    ytil.prettyPrint(swagger)
-  }
-
-  "prettyPrint exception" in {
-    ytil.prettyPrint(new NullPointerException("exception message"))
-  }
-
-  "prettyDiff" in {
+  "diff" in {
     val expected = swagger
     val actual = swagger.copy(paths =
       swagger.paths.view
         .mapValues(
           _.view
-            .mapValues(path => path.copy(responses = path.responses.view.mapValues(_.copy(description = None)).toMap))
+            .mapValues(path =>
+              path.copy(
+                parameters = path.parameters :+ Parameter("token", Left(Parameter.Path), None, required = false),
+                responses = path.responses.map { case (k, r) =>
+                  k -> r.copy(
+                    description = None,
+                    schema = r.schema
+                      .as[JsObject]
+                      .deepMerge(
+                        Json.obj( //
+                          "properties" -> (r.schema \ "properties").as[JsArray].value.map { p =>
+                            (p.as[JsObject] - "message")
+                          }
+                        )
+                      )
+                  )
+                }
+              )
+            )
             .toMap
         )
         .toMap
     )
 
-    ytil.prettyDiff(expected, actual)
-  }
-
-  "trace" in {
-    ytil.trace(limit = 10)
-  }
-
-  "sleep" in {
-    ytil.sleep(200)
+    debug.diff(expected, actual)
   }
 }
 
