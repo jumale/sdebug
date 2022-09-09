@@ -20,19 +20,22 @@ import scala.collection.{immutable, mutable}
 import scala.concurrent.Future
 import scala.util.Try
 
-class Debugger {
-  protected val indentSize: Int = 2
-  protected val maxWidth: Int = 120
-  protected val traceLimit: Int = 10
-  protected val multiline: Boolean = true
-  protected val showTraces: Boolean = true
-  protected val showBreadcrumbs: Boolean = true
-  protected val savingDir: String = "./target"
+final case class Settings(
+  indentSize: Int = 2,
+  maxWidth: Int = 120,
+  traceLimit: Int = 10,
+  multiline: Boolean = true,
+  showTraces: Boolean = true,
+  showBreadcrumbs: Boolean = true,
+  savingDir: String = "./target",
+  palette: Palette = Palette.default
+)
 
-  protected val palette: Palette = Palette.default
+class Debugger(settings: Settings) {
+  protected val palette: Palette = settings.palette
   protected val headerColor: String = palette.black
   protected val defaultColor: Colors = Colors(palette.reset, palette.reset, palette.reset)
-  protected val strColor: Colors = Colors(palette.green, palette.reset, palette.reset)
+  protected val strColor: Colors = Colors(palette.green, palette.black, palette.reset)
   protected val numColor: Colors = Colors(palette.cyan, palette.reset, palette.reset)
   protected val enumColor: Colors = Colors(palette.magenta, palette.reset, palette.reset)
   protected val futureColor: Colors = Colors(palette.cyan, palette.red, palette.reset)
@@ -43,16 +46,24 @@ class Debugger {
   protected val objColor: Colors = Colors(palette.yellow, palette.reset, palette.reset)
   protected val errorColor: Colors = Colors(palette.yellow, palette.red, palette.reset)
   protected val diffColors: Colors = Colors(palette.green, palette.red, palette.reset)
+  protected val tableColor: Colors = Colors(palette.black, palette.yellow, palette.reset)
 
-  def apply(value: Any): Unit = Console.println {
+  protected val renderParams: RenderParams = RenderParams( //
+    indentSize = settings.indentSize,
+    maxWidth = settings.maxWidth,
+    multiline = settings.multiline
+  )
+
+  protected def write(s: String): Unit = Console.println(s)
+
+  def apply(value: Any): Unit = write {
     value match {
       // if it's a short string - print it as a single-line log
-      case str: String if str.length < maxWidth =>
-        val line = lineLink(breadcrumb())
-        s"-> $str $headerColor$line $thread${palette.reset}"
+      case str: String if str.length < settings.maxWidth =>
+        s"-> $str $breadcrumbSidebar"
 
       // show exception stack-trace if enabled
-      case e: Throwable if showTraces =>
+      case e: Throwable if settings.showTraces =>
         breadcrumbHeader + prettify(e) + "\n  " + traceException(e).mkString("\n  ")
 
       // otherwise fully dump the value
@@ -60,40 +71,48 @@ class Debugger {
     }
   }
 
-  def diff(a: Any, b: Any): Unit = Console.println {
+  def diff(a: Any, b: Any): Unit = write {
     val d = Node.diff(toNode(a), toNode(b), diffColors)
-    breadcrumbHeader + d.render(RenderParams(indentSize = indentSize, maxWidth = maxWidth, multiline = multiline))
+    breadcrumbHeader + d.render(renderParams)
   }
 
-  def prettify(value: Any): String =
-    toNode(value).render(RenderParams(indentSize = indentSize, maxWidth = maxWidth, multiline = multiline))
-
-  def trace(limit: Int = Int.MaxValue): Unit = Console.println {
+  def trace(limit: Int = Int.MaxValue): Unit = write {
     breadcrumbHeader + traceException(new Exception).tail.take(limit).mkString("\n") + "\n" + palette.reset
   }
 
   def sleep(millis: Long): Unit = {
-    val link = if (showBreadcrumbs) lineLink(breadcrumb()) else ""
-    Console.println(s"-> ⏱  ${millis}ms $headerColor$link $thread${palette.reset}")
+    write(s"-> ⏱  ${millis}ms $breadcrumbSidebar")
     Thread.sleep(millis)
+  }
+
+  def table(header: Seq[String], rows: Seq[Any]*): Unit = write {
+    breadcrumbHeader + Table(header, rows.map(_.map(toNode)), tableColor).render(renderParams)
   }
 
   def save(v: Any, fileName: String): Unit = saveBytes(v.toString.getBytes, fileName)
 
   def saveBytes(v: Array[Byte], fileName: String): Unit = {
     import java.io._
-    val target = new BufferedOutputStream(new FileOutputStream(s"${savingDir}/$fileName"))
+    val target = new BufferedOutputStream(new FileOutputStream(s"${settings.savingDir}/$fileName"))
     try v.foreach(target.write(_))
     finally target.close()
   }
 
+  def prettify(value: Any): String =
+    toNode(value).render(renderParams)
+
   protected def header(title: String): String =
-    if (showBreadcrumbs) {
+    if (settings.showBreadcrumbs) {
       s"$headerColor.....................($title).....................${palette.reset}\n"
     } else ""
 
   protected def breadcrumbHeader: String =
-    header(palette.underlined + breadcrumb(3).toString + palette.reset + headerColor)
+    if (settings.showBreadcrumbs) header(palette.underlined + breadcrumb(3).toString + palette.reset + headerColor)
+    else ""
+
+  protected def breadcrumbSidebar: String =
+    if (settings.showBreadcrumbs) headerColor + lineLink(breadcrumb()) + " " + thread + palette.reset
+    else ""
 
   protected def breadcrumb(idx: Int = 2): Stack.Line = Stack().lift(idx).getOrElse(Stack.Line.empty)
 
@@ -103,7 +122,7 @@ class Debugger {
 
   protected def traceException(value: Throwable): Seq[String] =
     value.getStackTrace.toIndexedSeq
-      .take(traceLimit)
+      .take(settings.traceLimit)
       .map { se =>
         val clazz = palette.reset + se.getClassName
         val method = se.getMethodName
@@ -111,7 +130,8 @@ class Debugger {
         s"$clazz::$method($file)"
       }
 
-  def toNode(value: Any): Node[Any] =
+  // noinspection DuplicatedCode
+  protected def toNode(value: Any): Node[Any] =
     value match { // scalafmt: { maxColumn = 170 }
       case v if v == null         => NullNode(nullColor)
       case s: String              => StringNode(s, strColor)
@@ -134,25 +154,21 @@ class Debugger {
       // scalafmt: { maxColumn = 120 }
 
       case p: Product =>
-        val fields = value.getClass.getDeclaredFields.filterNot(_.isSynthetic).map(_.getName)
-        val values = p.productIterator.toSeq
-        // If we weren't able to match up fields/values, fall back to raw node.
-        if (fields.length != values.length)
-          RawNode(p, defaultColor)
+        val fields = p.productElementNames.toVector
+        val values = p.productIterator.toVector
         // if fields look like tuple
-        else if (fields.toSeq == fields.toSeq.zipWithIndex.map { case (_, i) => s"_${i + 1}" })
+        if (fields.forall(_.matches("^_\\d(\\$.*)?$")))
           CollectionNode(p.getClass, values.map(toNode), enumColor)
         // otherwise it's an object
         else
           ObjectNode(p.getClass, fields.zip(values).map { case (k, v) => toNode(k) -> toNode(v) }.toVector, objColor)
 
-      case e: Throwable => ErrorNode(e, errorColor)
-      case v =>
-        println(v.getClass.getName)
-        RawNode(v, defaultColor)
+      case e: Throwable                                                   => ErrorNode(e, errorColor)
+      case v if v.getClass.getInterfaces.contains(classOf[scala.Product]) => RawNode("!!!!!!", defaultColor)
+      case v                                                              => RawNode(v, defaultColor)
     }
 }
 
 object Debugger {
-  def apply(): Debugger = new Debugger
+  def apply(settings: Settings): Debugger = new Debugger(settings)
 }

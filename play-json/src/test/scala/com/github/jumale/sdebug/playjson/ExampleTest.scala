@@ -1,7 +1,7 @@
-package com.github.jumale.sdebug
+package com.github.jumale.sdebug.playjson
 
+import com.github.jumale.sdebug.Debugger
 import org.scalatest.wordspec.AnyWordSpec
-import com.github.jumale.sdebug.playjson.DebugJson
 import play.api.libs.json.{JsNull, JsValue, Json}
 
 final case class Foo(bar: Bar)

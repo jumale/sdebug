@@ -17,7 +17,7 @@ object Node {
         if (x.name != y.name)
           DiffNode(Some(x), Some(y), colors)
         else {
-          val (source, target, direction) =
+          val (source: Vector[Node[Any]], target: Vector[Node[Any]], direction: Boolean) =
             if (x.value.size >= y.value.size)
               (x.value.toVector, y.value.toVector, true)
             else
@@ -32,12 +32,13 @@ object Node {
           })
         }
 
-      case (x: MapNode[Any, Any], y: MapNode[Any, Any]) =>
+      case (x: MapNode[_, _], y: MapNode[_, _]) =>
+        // noinspection DuplicatedCode
         if (x.name != y.name)
           DiffNode(Some(x), Some(y), colors)
         else {
-          val xm = x.value.toMap
-          val ym = y.value.toMap
+          val xm: Map[Node[Any], Node[Any]] = x.value.toMap
+          val ym: Map[Node[Any], Node[Any]] = y.value.toMap
           x.copy(value = (xm.keySet ++ ym.keySet).map { key =>
             (xm.get(key), ym.get(key)) match {
               case (Some(l), None)    => DiffNode(Some(key), None, colors) -> l
@@ -49,11 +50,12 @@ object Node {
         }
 
       case (x: ObjectNode, y: ObjectNode) =>
+        // noinspection DuplicatedCode
         if (x.name != y.name)
           DiffNode(Some(x), Some(y), colors)
         else {
-          val xm = x.value.toMap
-          val ym = y.value.toMap
+          val xm: Map[Node[Any], Node[Any]] = x.value.toMap
+          val ym: Map[Node[Any], Node[Any]] = y.value.toMap
           x.copy(value = (xm.keySet ++ ym.keySet).map { key =>
             (xm.get(key), ym.get(key)) match {
               case (Some(l), None)    => DiffNode(Some(key), None, colors) -> l
@@ -77,12 +79,12 @@ object Node {
       colors.secondary + "---" + v.render(p.copy(colorize = false))
 
     override def render(implicit p: RenderParams): String =
-      ((a, b) match {
+      (a, b) match {
         case (Some(l), None)    => removed(l)
         case (None, Some(r))    => added(r)
         case (Some(l), Some(r)) => removed(l) + colors.reset + " >>> " + added(r)
         case _                  => throw new RuntimeException("DiffNode requires at least one non-empty value")
-      })
+      }
   }
 
   trait SimpleNode[+T] extends Node[T] {
@@ -98,10 +100,19 @@ object Node {
 
   final case class StringNode(value: String, colors: Colors) extends Node[String] {
     def render(implicit p: RenderParams): String =
-      colors.primary + wrapChar + value + wrapChar
+      open + value + close
 
-    private lazy val wrapChar: String =
-      if (value.matches("[\"\r\n]+")) "\"\"\""
+    private lazy val needsTripleQuote: Boolean = value.contains("\n") || value.contains("\"") || value.contains("\r")
+
+    private def open(implicit p: RenderParams): String = {
+      if (p.raw) colors.primary
+      else if (needsTripleQuote) colors.primary + "\"" + colors.secondary + "\"\"" + colors.primary
+      else colors.primary + "\""
+    }
+
+    private def close(implicit p: RenderParams): String =
+      if (p.raw) colors.primary
+      else if (needsTripleQuote) colors.secondary + "\"\"" + colors.primary + "\""
       else "\""
   }
 
@@ -151,20 +162,14 @@ object Node {
     customName: Option[String] = None
   ) extends Node[Iterable[Node[T]]] {
     def render(implicit p: RenderParams): String =
-      if (value.isEmpty) {
+      if (value.isEmpty)
         classColor + name + colors.reset + colors.primary + ".empty"
-      } else {
-        val oneLine = open + value.map(_.render(p.nextDepth)).mkString(sep) + close
-        if (oneLine.length <= p.rightBorder || !p.multiline) {
-          oneLine
-        } else if (value.size > 1) {
-          open + "\n" + value
-            .map(x => p.fieldIndent + x.render(p.nextDepth))
-            .mkString(sep + "\n") + "\n" + p.indent + close
-        } else {
-          open + value.map(_.render).mkString(sep) + close
-        }
-      }
+      else if (singleLine(p.noColors).length <= p.rightBorder || !p.multiline)
+        singleLine
+      else if (value.size > 1)
+        multiLine
+      else
+        singleElement
 
     lazy val name: String = customName.getOrElse {
       clazz.getName match {
@@ -173,20 +178,31 @@ object Node {
         case n if n.matches(collectionPkg + "Vector.*")            => "Vector"
         case n if n.matches(collectionPkg + "Set\\$(Empty)?Set.*") => "Set"
         case n if n.matches("scala\\.Tuple.*")                     => ""
-        case n                                                     => clazz.getSimpleName
+        case _                                                     => clazz.getSimpleName
       }
     }
 
-    protected def classColor(implicit p: RenderParams): String =
+    private def singleElement(implicit p: RenderParams): String =
+      open + value.map(_.render).mkString(sep) + close
+
+    private def singleLine(implicit p: RenderParams): String =
+      open + value.map(_.render(p.nextDepth)).mkString(sep) + close
+
+    private def multiLine(implicit p: RenderParams): String =
+      open + "\n" + value
+        .map(x => p.fieldIndent + x.render(p.nextDepth))
+        .mkString(sep + "\n") + "\n" + p.indent + close
+
+    private def classColor(implicit p: RenderParams): String =
       if (clazz.getName.contains(".mutable.")) colors.secondary
       else colors.primary
 
-    protected def open(implicit p: RenderParams): String =
+    private def open(implicit p: RenderParams): String =
       if (name.isEmpty) colors.primary + "("
       else classColor + name + colors.reset + colors.primary + "("
 
-    protected def close(implicit p: RenderParams): String = colors.primary + ")"
-    protected def sep(implicit p: RenderParams): String = colors.primary + ", "
+    private def close(implicit p: RenderParams): String = colors.primary + ")"
+    private def sep(implicit p: RenderParams): String = colors.primary + ", "
   }
 
   trait KeyValNode[K, V] extends Node[Vector[(Node[K], Node[V])]] {
@@ -196,16 +212,19 @@ object Node {
 
     def value: Vector[(Node[K], Node[V])]
 
-    def render(implicit p: RenderParams): String = {
-      val oneLine = open + fieldsOneLine(p) + close
-      if (value.isEmpty) {
+    def render(implicit p: RenderParams): String =
+      if (value.isEmpty)
         classColor + name + colors.reset + colors.primary + ".empty"
-      } else if (oneLine.length <= p.rightBorder || !p.multiline) {
-        oneLine
-      } else {
-        open + "\n" + fieldsMultiLine(p) + "\n" + p.indent + close
-      }
-    }
+      else if (singleLine(p.noColors).length <= p.rightBorder || !p.multiline)
+        singleLine
+      else
+        multiLine
+
+    protected def singleLine(implicit p: RenderParams): String =
+      open + fieldsOneLine(p) + close
+
+    protected def multiLine(implicit p: RenderParams): String =
+      open + "\n" + fieldsMultiLine(p) + "\n" + p.indent + close
 
     protected def classColor(implicit p: RenderParams): String = colors.primary
     protected def open(implicit p: RenderParams): String = s"$classColor$name${colors.reset}${colors.primary}("
@@ -246,7 +265,7 @@ object Node {
     lazy val name: String = customName.getOrElse {
       clazz.getName match {
         case n if n.matches(collectionPkg + "Map\\$(Empty)?Map.*") => "Map"
-        case n                                                     => clazz.getSimpleName
+        case _                                                     => clazz.getSimpleName
       }
     }
   }
@@ -269,21 +288,29 @@ object Node {
   }
 
   final case class ErrorNode(value: Throwable, colors: Colors) extends Node[Throwable] {
-    override def render(implicit p: RenderParams): String = {
-      val msgColors =
-        Colors(primaryColor = colors.secondaryColor, secondaryColor = colors.resetColor, resetColor = colors.resetColor)
-      val msg = StringNode(value.getMessage, msgColors).render(p.nextDepth)
+    override def render(implicit p: RenderParams): String =
+      if (singleLine(p.noColors).length <= p.rightBorder || !p.multiline)
+        singleLine
+      else
+        multiLine
 
-      val oneLine = open + msg + close
-      if (oneLine.length <= p.rightBorder || !p.multiline) {
-        oneLine
-      } else {
-        open + "\n" + p.indent + msg + "\n" + p.indent + close
-      }
-    }
+    private val msgColors: Colors = Colors( //
+      primaryColor = colors.secondaryColor,
+      secondaryColor = colors.resetColor,
+      resetColor = colors.resetColor
+    )
 
-    protected def name: String = value.getClass.getSimpleName.stripSuffix("$1")
-    protected def open(implicit p: RenderParams): String = colors.primary + name + "("
-    protected def close(implicit p: RenderParams): String = colors.primary + ")"
+    private def msg(implicit p: RenderParams): String =
+      StringNode(value.getMessage, msgColors).render(p.nextDepth)
+
+    private def singleLine(implicit p: RenderParams): String =
+      open + msg + close
+
+    private def multiLine(implicit p: RenderParams): String =
+      open + "\n" + p.indent + msg + "\n" + p.indent + close
+
+    private def name: String = value.getClass.getSimpleName.stripSuffix("$1")
+    private def open(implicit p: RenderParams): String = colors.primary + name + "("
+    private def close(implicit p: RenderParams): String = colors.primary + ")"
   }
 }

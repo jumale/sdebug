@@ -9,7 +9,7 @@ import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
 class ExampleTest extends AnyWordSpec {
-  val debug: Debugger = Debugger()
+  val debug: Debugger = Debugger(Settings())
 
   final case class Root(
     string: String = "hello world!",
@@ -165,5 +165,21 @@ class ExampleTest extends AnyWordSpec {
 
   "sleep" in {
     debug.sleep(200)
+  }
+
+  "table" in {
+    debug.table(
+      Seq("", "H1 the longest", "H2", "H3"),
+      Seq(
+        "foo",
+        "V1",
+        """V2
+          |new line
+          |yes""".stripMargin,
+        "V3"
+      ),
+      Seq("-bar-", "V1", "V2", "V3", "V4"),
+      Seq("--baz--", "V1", "V2")
+    )
   }
 }

@@ -1,10 +1,10 @@
 package com.github.jumale.sdebug.playjson
 
 import com.github.jumale.sdebug.Node.{BooleanNode, CollectionNode, MapNode, NullNode, NumberNode, StringNode}
-import com.github.jumale.sdebug.{Debugger, Node}
+import com.github.jumale.sdebug.{Debugger, Node, Settings}
 import play.api.libs.json.{JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString}
 
-class DebugJson extends Debugger {
+class DebugJson(settings: Settings) extends Debugger(settings) {
   override def toNode(value: Any): Node[Any] =
     value match {
       case JsNull       => NullNode(nullColor)
@@ -25,5 +25,5 @@ class DebugJson extends Debugger {
 }
 
 object DebugJson {
-  def apply(): DebugJson = new DebugJson
+  def apply(settings: Settings): DebugJson = new DebugJson(settings)
 }
