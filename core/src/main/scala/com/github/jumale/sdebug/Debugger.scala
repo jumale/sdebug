@@ -154,10 +154,13 @@ class Debugger(settings: Settings) {
       // scalafmt: { maxColumn = 120 }
 
       case p: Product =>
-        val fields = p.productElementNames.toVector
+        val fields = Util.getProductFields(p)
         val values = p.productIterator.toVector
+        // If we weren't able to match up fields/values, fall back to raw node.
+        if (fields.length != values.length)
+          RawNode(p, defaultColor)
         // if fields look like tuple
-        if (fields.forall(_.matches("^_\\d(\\$.*)?$")))
+        else if (fields.forall(_.matches("^_\\d(\\$.*)?$")))
           CollectionNode(p.getClass, values.map(toNode), enumColor)
         // otherwise it's an object
         else
