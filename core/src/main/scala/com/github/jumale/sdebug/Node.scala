@@ -100,18 +100,18 @@ object Node {
 
   final case class StringNode(value: String, colors: Colors) extends Node[String] {
     def render(implicit p: RenderParams): String =
-      open + value + close
+      open + value.replaceAll("([\r\n]+)", "$1" + colors.primary) + close
 
     private lazy val needsTripleQuote: Boolean = value.contains("\n") || value.contains("\"") || value.contains("\r")
 
     private def open(implicit p: RenderParams): String = {
-      if (p.raw) colors.primary
+      if (p.simplified) colors.primary
       else if (needsTripleQuote) colors.primary + "\"" + colors.secondary + "\"\"" + colors.primary
       else colors.primary + "\""
     }
 
     private def close(implicit p: RenderParams): String =
-      if (p.raw) colors.primary
+      if (p.simplified) colors.primary
       else if (needsTripleQuote) colors.secondary + "\"\"" + colors.primary + "\""
       else "\""
   }
@@ -186,23 +186,44 @@ object Node {
       open + value.map(_.render).mkString(sep) + close
 
     private def singleLine(implicit p: RenderParams): String =
-      open + value.map(_.render(p.nextDepth)).mkString(sep) + close
+      open + value.map(_.render(nextDepth)).mkString(sep) + close
 
     private def multiLine(implicit p: RenderParams): String =
-      open + "\n" + value
-        .map(x => p.fieldIndent + x.render(p.nextDepth))
-        .mkString(sep + "\n") + "\n" + p.indent + close
+      open + break() + value
+        .map(x => indent + x.render(nextDepth))
+        .mkString(multiSep) + break(p.indent) + close
 
     private def classColor(implicit p: RenderParams): String =
       if (clazz.getName.contains(".mutable.")) colors.secondary
       else colors.primary
 
     private def open(implicit p: RenderParams): String =
-      if (name.isEmpty) colors.primary + "("
+      if (p.simplified) ""
+      else if (name.isEmpty) colors.primary + "("
       else classColor + name + colors.reset + colors.primary + "("
 
-    private def close(implicit p: RenderParams): String = colors.primary + ")"
-    private def sep(implicit p: RenderParams): String = colors.primary + ", "
+    private def close(implicit p: RenderParams): String =
+      if (p.simplified) ""
+      else colors.primary + ")"
+
+    private def break(after: String = "")(implicit p: RenderParams): String =
+      if (p.simplified) ""
+      else "\n" + after
+
+    private def nextDepth(implicit p: RenderParams): RenderParams =
+      if (p.simplified) p
+      else p.nextDepth
+
+    private def indent(implicit p: RenderParams): String =
+      if (p.simplified) ""
+      else p.fieldIndent
+
+    private def sep(implicit p: RenderParams): String =
+      colors.primary + ", "
+
+    private def multiSep(implicit p: RenderParams): String =
+      if (p.simplified) "\n"
+      else colors.primary + ", \n"
   }
 
   trait KeyValNode[K, V] extends Node[Vector[(Node[K], Node[V])]] {

@@ -10,7 +10,7 @@ package com.github.jumale.sdebug
   *   set it to false to force render everything as single line
   * @param colorize
   *   disables colors but keeps formatting
-  * @param raw
+  * @param simplified
   *   some values support raw mode (e.g. strings are rendered without quotes)
   */
 final case class RenderParams( //
@@ -19,7 +19,7 @@ final case class RenderParams( //
   maxWidth: Int = 120,
   multiline: Boolean = true,
   colorize: Boolean = true,
-  raw: Boolean = false
+  simplified: Boolean = false
 ) {
   lazy val indent: String = " " * depth * indentSize
   lazy val fieldIndent: String = indent + (" " * indentSize)

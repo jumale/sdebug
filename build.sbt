@@ -11,7 +11,7 @@ ThisBuild / homepage := Some(url("https://github.com/jumale/sdebug"))
 ThisBuild / licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0"))
 
 lazy val root = (project in file("."))
-  .aggregate(core, playJsonSupport, shortcut)
+  .aggregate(core, playJsonSupport, scalatestSupport, shortcut)
   .settings(name := "sdebug")
 
 lazy val core = (project in file("./core"))
@@ -29,11 +29,19 @@ lazy val playJsonSupport = (project in file("./play-json"))
   )
   .dependsOn(core)
 
+lazy val scalatestSupport = (project in file("./scalatest"))
+  .settings( //
+    name := "sdebug-scalatest",
+    crossScalaVersions := supportedScalaVersions,
+    libraryDependencies ++= Seq(scalaTest)
+  )
+  .dependsOn(core)
+
 lazy val shortcut = (project in file("./shortcut"))
   .settings( //
     name := "sdebug-shortcut",
     crossScalaVersions := supportedScalaVersions
   )
-  .dependsOn(core, playJsonSupport)
+  .dependsOn(core, playJsonSupport, scalatestSupport)
 
 // See https://www.scala-sbt.org/1.x/docs/Using-Sonatype.html for instructions on how to publish to Sonatype.

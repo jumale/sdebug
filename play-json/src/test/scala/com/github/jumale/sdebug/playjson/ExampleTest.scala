@@ -1,6 +1,6 @@
 package com.github.jumale.sdebug.playjson
 
-import com.github.jumale.sdebug.Debugger
+import com.github.jumale.sdebug.{Debugger, Formatter}
 import org.scalatest.wordspec.AnyWordSpec
 import play.api.libs.json.{JsNull, JsValue, Json}
 
@@ -8,7 +8,7 @@ final case class Foo(bar: Bar)
 final case class Bar(json: JsValue)
 
 class ExampleTest extends AnyWordSpec {
-  val debug: Debugger = DebugJson()
+  val debug: Debugger = new Debugger(formatter = Formatter(extend = JsonFormatter))
 
   val example: Foo = Foo(
     Bar(
@@ -29,6 +29,6 @@ class ExampleTest extends AnyWordSpec {
   )
 
   "dump json" in {
-    debug(example)
+    debug.dump(example)
   }
 }

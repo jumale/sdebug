@@ -1,11 +1,8 @@
-import com.github.jumale.sdebug.playjson.DebugJson
-import com.github.jumale.sdebug.Settings
+import com.github.jumale.sdebug.playjson.JsonFormatter
+import com.github.jumale.sdebug.scalatest.Prettifier
+import com.github.jumale.sdebug.{Debugger, Formatter}
 
-package object sdebug {
-  var maxWidth: Int = 120
-
-  val debug: DebugJson = DebugJson(Settings(maxWidth = maxWidth))
-
-  def prettyPrint(v: Any): Unit = debug.apply(v)
-  def diff(a: Any, b: Any): Unit = debug.diff(a, b)
+package object sdebug extends Debugger(formatter = Formatter(extend = JsonFormatter)) {
+  implicit val scalatestPrettifierSBT: org.scalactic.Prettifier = Prettifier.sbt(formatter)
+  implicit val scalatestPrettifierIDE: org.scalactic.Prettifier = Prettifier.ide(formatter)
 }

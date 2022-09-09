@@ -1,11 +1,10 @@
 package com.github.jumale.sdebug
 
-import com.github.jumale.sdebug.playjson.DebugJson
 import org.scalatest.wordspec.AnyWordSpec
-import play.api.libs.json.{JsArray, JsNull, JsObject, JsString, JsValue, Json}
+import play.api.libs.json._
 
 class PetStoreExample extends AnyWordSpec {
-  val debug: Debugger = DebugJson()
+  val debug: Debugger = new Debugger()
 
   val swagger: Swagger = Swagger(
     Map(
@@ -45,7 +44,7 @@ class PetStoreExample extends AnyWordSpec {
   )
 
   "print" in {
-    debug(swagger)
+    debug.dump(swagger)
   }
 
   "diff" in {

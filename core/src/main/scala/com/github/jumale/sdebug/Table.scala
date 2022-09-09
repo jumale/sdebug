@@ -5,13 +5,14 @@ final case class Cell(x: Int, y: Int, value: Node[Any], width: Int = 0, height: 
   lazy val contentHeight: Int = rawLines.length
   lazy val outerWidth: Int = width + 3
 
-  private lazy val rawLines: Vector[String] =
-    value.render(RenderParams(colorize = false, raw = true)).split("\n").toVector
+  private lazy val rawLines: Vector[String] = {
+    value.render(RenderParams(colorize = false, simplified = true, maxWidth = 80)).split("\n").toVector
+  }
 
   def render(colors: Colors)(implicit p: RenderParams): Vector[String] = {
     val header: String = colors.primary + ("-" * outerWidth)
     val content: Vector[String] = value
-      .render(p.copy(raw = true))
+      .render(p.copy(simplified = true, maxWidth = 80))
       .split("\n")
       .toVector
       .padTo(height, "")

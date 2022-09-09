@@ -9,7 +9,7 @@ import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
 class ExampleTest extends AnyWordSpec {
-  val debug: Debugger = Debugger(Settings())
+  val debug: Debugger = new Debugger()
 
   final case class Root(
     string: String = "hello world!",
@@ -97,20 +97,20 @@ class ExampleTest extends AnyWordSpec {
   val example: Root = Root()
 
   "simple log" in {
-    debug("lorem ipsum")
+    debug.log("lorem ipsum")
   }
 
   "full dump" in {
-    debug(example)
+    debug.dump(example)
   }
 
   "dump root exception" in {
-    debug(new NullPointerException("exception message"))
+    debug.dump(new NullPointerException("exception message"))
   }
 
   "dump root custom exception" in {
     final case class MyException(msg: String, level: Int) extends RuntimeException(msg)
-    debug(MyException("exception message", 42))
+    debug.dump(MyException("exception message", 42))
   }
 
   "diff" in {
@@ -168,8 +168,9 @@ class ExampleTest extends AnyWordSpec {
   }
 
   "table" in {
+    final case class CellVal(a: String, b: Int)
     debug.table(
-      Seq("", "H1 the longest", "H2", "H3"),
+      Seq("", "H1", "H2", "H3 the longest by header"),
       Seq(
         "foo",
         "V1",
@@ -178,8 +179,14 @@ class ExampleTest extends AnyWordSpec {
           |yes""".stripMargin,
         "V3"
       ),
-      Seq("-bar-", "V1", "V2", "V3", "V4"),
-      Seq("--baz--", "V1", "V2")
+      Seq(
+        "-bar-",
+        List(CellVal("a", 1), CellVal("b", 2), CellVal("c", 3), CellVal("d", 4), CellVal("e", 5)),
+        "V2",
+        (42, Left(None)),
+        "V4"
+      ),
+      Seq("--baz--", "V1", false)
     )
   }
 }
