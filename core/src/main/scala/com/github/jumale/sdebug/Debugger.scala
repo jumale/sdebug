@@ -30,7 +30,7 @@ class Debugger(
   }
 
   def sleep(millis: Long): Unit = {
-    printer(s"-> ⏱  ${millis}ms $breadcrumbSidebar")
+    printer(s"${resetColor}-> ⏱  ${millis}ms $breadcrumbSidebar")
     Thread.sleep(millis)
   }
 
@@ -57,7 +57,7 @@ class Debugger(
     else ""
 
   protected def breadcrumbSidebar: String =
-    if (settings.showBreadcrumbs) headerColor + lineLink(breadcrumb()) + " " + thread + resetColor
+    if (settings.showBreadcrumbs) headerColor + lineLink(breadcrumb(3)) + " " + thread + resetColor
     else ""
 
   protected def breadcrumb(idx: Int = 2): Stack.Line = Stack().lift(idx).getOrElse(Stack.Line.empty)
