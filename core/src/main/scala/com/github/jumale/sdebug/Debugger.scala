@@ -53,14 +53,14 @@ class Debugger(
     } else ""
 
   protected def breadcrumbHeader: String =
-    if (settings.showBreadcrumbs) header(underlineColor + breadcrumb(3).toString + resetColor + headerColor)
+    if (settings.showBreadcrumbs) header(underlineColor + breadcrumb().toString + resetColor + headerColor)
     else ""
 
   protected def breadcrumbSidebar: String =
-    if (settings.showBreadcrumbs) headerColor + lineLink(breadcrumb(3)) + " " + thread + resetColor
+    if (settings.showBreadcrumbs) headerColor + lineLink(breadcrumb()) + " " + thread + resetColor
     else ""
 
-  protected def breadcrumb(idx: Int = 2): Stack.Line = Stack().lift(idx).getOrElse(Stack.Line.empty)
+  protected def breadcrumb(idx: Int = 3): Stack.Line = Stack().lift(idx).getOrElse(Stack.Line.empty)
 
   protected def lineLink(line: Stack.Line): String = s"...(${line.toString})"
 
