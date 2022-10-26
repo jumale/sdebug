@@ -1,8 +1,10 @@
 package com.github.jumale.sdebug
 
+import java.time.{Instant, LocalTime}
+
 class Debugger(
-  val settings: Debugger.Settings = Debugger.Settings(),
-  val formatter: Formatter = Formatter(),
+  var settings: Debugger.Settings = Debugger.Settings(),
+  var formatter: Formatter = Formatter(),
   printer: String => Unit = Console.println
 ) {
   protected val headerColor: String = formatter.settings.palette.black
@@ -10,7 +12,7 @@ class Debugger(
   protected val underlineColor: String = formatter.settings.palette.underlined
 
   def log(msg: String): Unit = printer {
-    s"-> $msg $breadcrumbSidebar"
+    s"$timePrefix-> $msg $breadcrumbSidebar"
   }
 
   def dump(value: Any): Unit = printer {
@@ -29,8 +31,10 @@ class Debugger(
     breadcrumbHeader + traceException(new Exception).tail.take(limit).mkString("\n") + "\n" + resetColor
   }
 
-  def sleep(millis: Long): Unit = {
-    printer(s"${resetColor}-> ⏱  ${millis}ms $breadcrumbSidebar")
+  def sleep(millis: Long): Unit = sleep("", millis)
+
+  def sleep(name: String, millis: Long): Unit = {
+    printer(s"$resetColor$timePrefix-> ⏱  ${millis}ms" + s" $name".stripSuffix(" ") + " " + breadcrumbSidebar)
     Thread.sleep(millis)
   }
 
@@ -48,9 +52,11 @@ class Debugger(
   }
 
   protected def header(title: String): String =
-    if (settings.showBreadcrumbs) {
-      s"$headerColor.....................($title).....................$resetColor\n"
-    } else ""
+    (settings.showBreadcrumbs, settings.showTime) match {
+      case (true, true)  => s"$headerColor$fmtTime...........($title).....................$resetColor\n"
+      case (true, false) => s"$headerColor.....................($title).....................$resetColor\n"
+      case _             => ""
+    }
 
   protected def breadcrumbHeader: String =
     if (settings.showBreadcrumbs) header(underlineColor + breadcrumb().toString + resetColor + headerColor)
@@ -59,6 +65,12 @@ class Debugger(
   protected def breadcrumbSidebar: String =
     if (settings.showBreadcrumbs) headerColor + lineLink(breadcrumb()) + " " + thread + resetColor
     else ""
+
+  protected def timePrefix: String =
+    if (settings.showTime) headerColor + fmtTime + " " + resetColor
+    else ""
+
+  protected def fmtTime: String = LocalTime.now().toString
 
   protected def breadcrumb(idx: Int = 3): Stack.Line = Stack().lift(idx).getOrElse(Stack.Line.empty)
 
@@ -82,6 +94,7 @@ object Debugger {
     traceLimit: Int = 10,
     showTraces: Boolean = true,
     showBreadcrumbs: Boolean = true,
+    showTime: Boolean = false,
     savingDir: String = "./target"
   )
 }

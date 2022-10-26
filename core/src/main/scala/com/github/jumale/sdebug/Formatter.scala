@@ -61,9 +61,8 @@ final case class Formatter(
           RawNode(p, settings.defaultColor)
 
         // if fields look like tuple
-        else if (fields.forall(_.matches("^_\\d(\\$.*)?$")))
+        else if (fields.nonEmpty && fields.forall(_.matches("^_\\d(\\$.*)?$")))
           CollectionNode(p.getClass, values.map(toNode), settings.enumColor)
-
         // otherwise it's an object
         else
           ObjectNode( //

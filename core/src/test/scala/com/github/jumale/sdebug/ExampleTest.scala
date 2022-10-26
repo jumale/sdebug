@@ -74,7 +74,9 @@ class ExampleTest extends AnyWordSpec {
       42
     },
     successFuture: Future[Int] = Future(42),
-    failedFuture: Future[Int] = Future(throw new RuntimeException("error"))
+    failedFuture: Future[Int] = Future(throw new RuntimeException("error")),
+    color: Seq[Color] = Seq(Color.Red, Color.Green),
+    dataType: Seq[DataType] = Seq(DataType.NoFields, DataType.WithFields("foo", 42))
   )
 
   final case class Collections(
@@ -93,6 +95,18 @@ class ExampleTest extends AnyWordSpec {
     mutableSortedMap: mutable.SortedMap[String, Int],
     mutableHashMap: mutable.HashMap[String, Int]
   )
+
+  sealed abstract class Color(val name: String)
+  object Color {
+    case object Red extends Color("red")
+    case object Green extends Color("green")
+  }
+
+  sealed trait DataType
+  object DataType {
+    case object NoFields extends DataType
+    final case class WithFields(foo: String, bar: Int) extends DataType
+  }
 
   val example: Root = Root()
 

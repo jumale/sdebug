@@ -235,11 +235,14 @@ object Node {
 
     def render(implicit p: RenderParams): String =
       if (value.isEmpty)
-        classColor + name + colors.reset + colors.primary + ".empty"
+        emptyState
       else if (singleLine(p.noColors).length <= p.rightBorder || !p.multiline)
         singleLine
       else
         multiLine
+
+    protected def emptyState(implicit p: RenderParams): String =
+      classColor + name + colors.reset + colors.primary + ".empty"
 
     protected def singleLine(implicit p: RenderParams): String =
       open + fieldsOneLine(p) + close
@@ -306,6 +309,9 @@ object Node {
         open + renderFields(p, p)(_._2).head + close
       else
         super.render
+
+    override protected def emptyState(implicit p: RenderParams): String =
+      classColor + name.stripSuffix("$")
   }
 
   final case class ErrorNode(value: Throwable, colors: Colors) extends Node[Throwable] {
