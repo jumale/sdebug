@@ -181,8 +181,8 @@ class ExampleTest extends AnyWordSpec {
     debug.sleep(200)
   }
 
+  final case class CellVal(a: String, b: Int)
   "table" in {
-    final case class CellVal(a: String, b: Int)
     debug.table(
       Seq("", "H1", "H2", "H3 the longest by header"),
       Seq(
@@ -202,5 +202,21 @@ class ExampleTest extends AnyWordSpec {
       ),
       Seq("--baz--", "V1", false)
     )
+  }
+
+  "table simple" in {
+    debug.table(
+      Seq("Name", "Value"),
+      Seq("string", "foo"),
+      Seq("tuple", (42, Left(None))),
+      Seq("bool", false),
+      Seq("list of case classes", List(CellVal("a", 1), CellVal("b", 2), CellVal("c", 3), CellVal("d", 4)))
+    )
+  }
+
+  "measure" in {
+    debug.measure("myCode") {
+      Thread.sleep(100)
+    }
   }
 }

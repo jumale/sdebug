@@ -1,80 +1,110 @@
 # Scala Debugging Utils
 
-The library provides basic tools for debugging Scala code in console:
-- pretty-printing variables
-- pretty-diff
-- 
-
-Ytil is my personal util-library which I use for debugging in my daily work (mostly in tests). It all started with 
+This library provides basic tools for debugging Scala code in console: pretty-printing variables, diffs, and some more.<br>
+It is my personal util-library which I use for debugging in my daily work (mostly in tests). It's all started with 
 a single function `prettyFormat` ([inspired by this gist](https://gist.github.com/carymrobbins/7b8ed52cd6ea186dbdf8)) 
 and eventually grew into my personal tool-kit.
 
-#### Why I need it:
-I have been using Jetbrains IDEs for many years, and I love its functionality, including Run/Debug features.
-However, in bigger Scala projects it really suffers sometimes from performance issues, especially when started Run/Debug
-processes overlap with code-completion. So at some point I started using IDE only for code editing, while running tests
-in watch-mode in SBT console, and this is where these utils started helping me a lot.
+### Use case
+I use this library during development when writing/debugging tests and code in Intellij IDE.<br>
+Sometimes it's even quicker and looks better than native debugging in IDE with break-points, and sometimes it's the only way to debug
+if IDE fails to run/debug code because of some internal configuration problems.<br>
+All functions in this library also print breadcrumbs, which is recognised by Intellij as a code-link, so that it's easy to find
+and remove all debugging before committing changes.<br>
+I always use this library as a globally installed package on my machine - this way I always ensure that if I forget to
+delete any of my prints before commit/push, then a CI build should fail and send me a notification (because this library exists 
+only on the developer's machine).
 
-#### How I install it:
-I do not install it in my projects in a normal way (via SBT). 
-Instead, I create a sym-link from this repository to source folders in my projects:
-```shell
-link -S /my/porject/root/src/main/scala/ytil /this/repo/root/src/main/scala/ytil
-```
-This way I can edit my utils on fly from any project whenever I want to change/add something, and all updates immediately
-appear in all other projects.
-
-Another positive side effect of this way is that I can not accidentally commit my prints into source code - 
-in this case the compiler on CI will immediately fail because these functions do not exist there.
-
-#### Why the package name is just `ytil`:
-It's to be able to use my functions without any imports and still keeping them short:
+### Installation
+This is my default way of installation, assuming that I use PlayJson and Scalatest in all my projects:
+- clone this project locally
+- go to the root folder and run `sbt +publishLocal`
+- create if not exists `~/.sbt/1.0/global.sbt` (or `~/.sbt/0.13/global.sbt` for older SBT) with contents:
 ```scala
-// instead of
-com.my.super.awesome.package.prettyPrint(42)
-// or
-import com.my.super.awesome.package.prettyPrint
-prettyPrint(42)
-// it's just
-ytil.prettyPrint(42)
+libraryDependencies ++= Seq(
+  "com.github.jumale" %% "sdebug-core"      % "0.1.0-SNAPSHOT",
+  "com.github.jumale" %% "sdebug-play-json" % "0.1.0-SNAPSHOT",
+  "com.github.jumale" %% "sdebug-scalatest" % "0.1.0-SNAPSHOT",
+  "com.github.jumale" %% "sdebug-shortcut"  % "0.1.0-SNAPSHOT"
+)
 ```
-I have a bunch of shortcuts in IDE to quickly summon every function:
-`ll` for `ytil.log()`, `pp` for `ytil.prettyPrint()`, `dd` for `ytil.prettyDiff()` and so on.
+The `sdebug-shortcut` package is the aggregation of core, play-json and scalatest with a shortcut access to functions
+like `sdebug.functioName(...)`. If you do not need play-json or scalatest, or need support for some other libraries - then
+you can just use the core library and extend it the way you need.
 
-### Examples
-You can find all these examples in the [ExampleTest.scala](./src/test/scala/ytil/ExampleTest.scala).
+### Functions
+You can find all these examples in the [ExampleTest.scala](./core/src/test/scala/com/github/jumale/sdebug/ExampleTest.scala).
 
-Note: each function also prints the line where it's used, and Intellij converts into a proper link. 
+---
 ```scala
-// just a simple log-message (helpful for tracing)
-ytil.log(s"lorem ipsum")
+// just a simple log-message (helpful for tracing logic flows)
+sdebug.log(s"lorem ipsum")
 ```
 ![log](./doc/screenshot/log.png)
+
+---
 ```scala
 // pretty-prints any variable
-// the printed result is a valid Scala code, so it can be copy-pasted back to editor 
-ytil.prettyPrint(swagger)
+// the printed result is a valid Scala code, so it can be copy-pasted back to IDE if needed
+sdebug.dump(swagger)
+// also can print multiple values: sdebug.dump(foo, bar, baz)
 ```
-![log](./doc/screenshot/prettyPrint.png)
+![log](./doc/screenshot/dump.png)
+
+---
 ```scala
 // exceptions are printed with stack-trace
 // the stack-trace length is limited to 10 by default but it can be changed via render-params 
-ytil.prettyPrint(swagger)
+sdebug.dump(exception)
 ```
-![log](./doc/screenshot/prettyPrintException.png)
+![log](./doc/screenshot/dumpException.png)
+
+---
 ```scala
-// this function is simple stupid - it just pretty-formats 2 values and then calculates the diff line by line
-ytil.prettyDiff(expected, actual)
+// prints diffs between two values
+// the diff is calculated recursively, and shows precisely which key or value has been changed/added/deleted
+sdebug.diff(left, right)
 ```
-![log](./doc/screenshot/prettyDiff.png)
+![log](./doc/screenshot/diff.png)
+
+---
 ```scala
-// it's useful when I need to quickly trace a call-stack 
-ytil.trace(limit = 10)
+// just prints a stack-trace to the current line 
+sdebug.trace(limit = 10)
 ```
 ![log](./doc/screenshot/trace.png)
+
+---
 ```scala
-// makes it easy to track sleep-calls
-// and also it does not let me to forget about them and accidentally commit
-ytil.sleep(200)
+// a wrapper for Thread.sleep, which also prints breadcrumbs, so that it can't be accidentally forgotten in code 
+sdebug.sleep(200)
 ```
 ![log](./doc/screenshot/sleep.png)
+
+---
+```scala
+// printing results in table format 
+sdebug.table(
+  Seq("Name", "Value"),
+  Seq("string", "foo"),
+  Seq("tuple", (42, Left(None))),
+  Seq("bool", false),
+  Seq("list of case classes", List(CellVal("a", 1), CellVal("b", 2), CellVal("c", 3), CellVal("d", 4)))
+)
+```
+![log](./doc/screenshot/table.png)
+
+---
+```scala
+// measures execution time of the provided code-block 
+// also supports custom name: sdebug.measure("customName")(myFunction())
+sdebug.measure(myFunction())
+```
+![log](./doc/screenshot/sleep.png)
+
+---
+```scala
+// same as 'dump', but saves results into the specified file instead of printing
+// the result is also de-colorized
+sdebug.save("filename.txt")(foo, bar, baz)
+```

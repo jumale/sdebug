@@ -16,15 +16,7 @@ class Debugger(
   }
 
   def dump(values: Any*): Unit = printer {
-    breadcrumbHeader + values
-      .map { value =>
-        val footer = value match {
-          case e: Throwable if settings.showTraces => "\n  " + traceException(e).mkString("\n  ")
-          case _                                   => ""
-        }
-        formatter(value) + footer
-      }
-      .mkString("\n")
+    breadcrumbHeader + values.map(value => formatter(value) + footer(value)).mkString("\n")
   }
 
   def diff(a: Any, b: Any): Unit = printer {
@@ -56,9 +48,13 @@ class Debugger(
     breadcrumbHeader + formatter(header, rows: _*)
   }
 
-  def save(v: Any, fileName: String): Unit = saveBytes(v.toString.getBytes, fileName)
+  def save(fileName: String)(v: Any*): Unit = saveBytes(fileName) {
+    val fmt = formatter.copy(settings = formatter.settings.copy(colorize = false))
+    val result = breadcrumbHeader + v.map(value => fmt(value) + footer(value)).mkString("\n")
+    result.getBytes
+  }
 
-  def saveBytes(v: Array[Byte], fileName: String): Unit = {
+  def saveBytes(fileName: String)(v: Array[Byte]): Unit = {
     import java.io._
     val target = new BufferedOutputStream(new FileOutputStream(s"${settings.savingDir}/$fileName"))
     try v.foreach(target.write(_))
@@ -71,6 +67,11 @@ class Debugger(
       case (true, false) => s"$headerColor.....................($title).....................$resetColor\n"
       case _             => ""
     }
+
+  protected def footer(value: Any): String = value match {
+    case e: Throwable if settings.showTraces => "\n  " + traceException(e).mkString("\n  ")
+    case _                                   => ""
+  }
 
   protected def breadcrumbHeader: String =
     if (settings.showBreadcrumbs) header(underlineColor + breadcrumb().toString + resetColor + headerColor)
