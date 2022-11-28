@@ -122,7 +122,7 @@ object Formatter {
       mapColor = Colors(palette.cyan, palette.cyan + palette.underlined, palette.reset),
       objColor = Colors(palette.yellow, palette.reset, palette.reset),
       errorColor = Colors(palette.yellow, palette.red, palette.reset),
-      diffColors = Colors(palette.green, palette.red, palette.reset),
+      diffColors = Colors(palette.greenBg + palette.black, palette.redBg + palette.black, palette.reset),
       tableColor = Colors(palette.black, palette.yellow, palette.reset)
     )
   }

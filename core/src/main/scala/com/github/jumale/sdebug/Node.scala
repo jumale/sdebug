@@ -73,10 +73,10 @@ object Node {
     def value: Any = a.map(_.value).orElse(b.map(_.value)).orNull
 
     private def added(v: Node[Any])(implicit p: RenderParams): String =
-      colors.primary + "+++" + v.render(p.copy(colorize = false))
+      colors.primary + v.render(p.copy(colorize = false)) + colors.reset
 
     private def removed(v: Node[Any])(implicit p: RenderParams): String =
-      colors.secondary + "---" + v.render(p.copy(colorize = false))
+      colors.secondary + v.render(p.copy(colorize = false)) + colors.reset
 
     override def render(implicit p: RenderParams): String =
       (a, b) match {

@@ -1,6 +1,6 @@
 package com.github.jumale.sdebug
 
-import java.time.{Instant, LocalTime}
+import java.time.LocalTime
 
 class Debugger(
   var settings: Debugger.Settings = Debugger.Settings(),
@@ -15,12 +15,16 @@ class Debugger(
     s"$timePrefix-> $msg $breadcrumbSidebar"
   }
 
-  def dump(value: Any): Unit = printer {
-    val footer = value match {
-      case e: Throwable if settings.showTraces => "\n  " + traceException(e).mkString("\n  ")
-      case _                                   => ""
-    }
-    breadcrumbHeader + formatter(value) + footer
+  def dump(values: Any*): Unit = printer {
+    breadcrumbHeader + values
+      .map { value =>
+        val footer = value match {
+          case e: Throwable if settings.showTraces => "\n  " + traceException(e).mkString("\n  ")
+          case _                                   => ""
+        }
+        formatter(value) + footer
+      }
+      .mkString("\n")
   }
 
   def diff(a: Any, b: Any): Unit = printer {
@@ -36,6 +40,16 @@ class Debugger(
   def sleep(name: String, millis: Long): Unit = {
     printer(s"$resetColor$timePrefix-> ⏱  ${millis}ms" + s" $name".stripSuffix(" ") + " " + breadcrumbSidebar)
     Thread.sleep(millis)
+  }
+
+  def measure[T](f: => T): T = measure("")(f)
+
+  def measure[T](name: String)(f: => T): T = {
+    val start = System.currentTimeMillis()
+    val result = f
+    val millis = System.currentTimeMillis() - start
+    printer(s"$resetColor$timePrefix-> ⏱  ${millis}ms" + s" $name".stripSuffix(" ") + " " + breadcrumbSidebar)
+    result
   }
 
   def table(header: Seq[String], rows: Seq[Any]*): Unit = printer {
