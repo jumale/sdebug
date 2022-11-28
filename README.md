@@ -1,4 +1,9 @@
-# ytil
+# Scala Debugging Utils
+
+The library provides basic tools for debugging Scala code in console:
+- pretty-printing variables
+- pretty-diff
+- 
 
 Ytil is my personal util-library which I use for debugging in my daily work (mostly in tests). It all started with 
 a single function `prettyFormat` ([inspired by this gist](https://gist.github.com/carymrobbins/7b8ed52cd6ea186dbdf8)) 
