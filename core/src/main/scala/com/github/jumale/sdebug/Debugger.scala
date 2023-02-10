@@ -19,8 +19,8 @@ class Debugger(
     breadcrumbHeader + values.map(value => formatter(value) + footer(value)).mkString("\n")
   }
 
-  def diff(a: Any, b: Any): Unit = printer {
-    breadcrumbHeader + formatter(a, b)
+  def diff(actual: Any, expected: Any): Unit = printer {
+    breadcrumbHeader + formatter(actual, expected)
   }
 
   def trace(limit: Int = Int.MaxValue): Unit = printer {

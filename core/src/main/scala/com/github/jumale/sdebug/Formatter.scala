@@ -10,7 +10,7 @@ final case class Formatter(
   settings: Formatter.Settings = Formatter.Settings(),
   extend: PartialFunction[(Any, Formatter), Node[Any]] = PartialFunction.empty
 ) {
-  protected val renderParams: RenderParams = RenderParams( //
+  private val renderParams: RenderParams = RenderParams( //
     indentSize = settings.indentSize,
     maxWidth = settings.maxWidth,
     multiline = settings.multiline,
@@ -18,10 +18,10 @@ final case class Formatter(
   )
 
   def apply(value: Any): String =
-    toNode(value).render(renderParams)
+    toNode(value).render(renderParams) + settings.palette.reset
 
-  def apply(a: Any, b: Any): String =
-    Node.diff(toNode(a), toNode(b), settings.diffColors).render(renderParams)
+  def apply(actual: Any, expected: Any): String =
+    Node.diff(toNode(actual), toNode(expected), settings.diffColors).render(renderParams)
 
   def apply(header: Seq[String], rows: Seq[Any]*): String =
     Table(header, rows.map(_.map(toNode)), settings.tableColor).render(renderParams)

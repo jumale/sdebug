@@ -9,8 +9,8 @@ trait Node[+T] {
 }
 
 object Node {
-  def diff(a: Node[Any], b: Node[Any], colors: Colors): Node[Any] =
-    (a, b) match {
+  def diff(actual: Node[Any], expected: Node[Any], colors: Colors): Node[Any] =
+    (expected, actual) match {
       case (x, y) if x.value == y.value => x
 
       case (x: CollectionNode[_], y: CollectionNode[_]) =>
@@ -66,7 +66,7 @@ object Node {
           }.toVector)
         }
 
-      case _ => DiffNode(Some(a), Some(b), colors)
+      case _ => DiffNode(Some(expected), Some(actual), colors)
     }
 
   final case class DiffNode(a: Option[Node[Any]], b: Option[Node[Any]], colors: Colors) extends Node[Any] {
