@@ -8,6 +8,8 @@ package com.github.jumale.sdebug
   *   objects and collections will be rendered as single-line if they fit into this width
   * @param multiline
   *   set it to false to force render everything as single line
+  * @param showNames
+  *   set it to false to hide property names and only print values
   * @param colorize
   *   disables colors but keeps formatting
   * @param simplified
@@ -18,6 +20,7 @@ final case class RenderParams( //
   indentSize: Int = 2,
   maxWidth: Int = 120,
   multiline: Boolean = true,
+  showNames: Boolean = true,
   colorize: Boolean = true,
   simplified: Boolean = false
 ) {

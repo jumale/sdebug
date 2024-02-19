@@ -10,27 +10,31 @@ class Debugger(
   protected val headerColor: String = formatter.settings.palette.black
   protected val resetColor: String = formatter.settings.palette.reset
   protected val underlineColor: String = formatter.settings.palette.underlined
+  private var print: String => Unit = printer
 
-  def log(msg: String): Unit = printer {
+  def on(): Unit = print = printer
+  def off(): Unit = print = _ => ()
+
+  def log(msg: String): Unit = print {
     s"$timePrefix-> $msg $breadcrumbSidebar"
   }
 
-  def dump(values: Any*): Unit = printer {
+  def dump(values: Any*): Unit = print {
     breadcrumbHeader + values.map(value => formatter(value) + footer(value)).mkString("\n")
   }
 
-  def diff(actual: Any, expected: Any): Unit = printer {
+  def diff(actual: Any, expected: Any): Unit = print {
     breadcrumbHeader + formatter(actual, expected)
   }
 
-  def trace(limit: Int = Int.MaxValue): Unit = printer {
+  def trace(limit: Int = Int.MaxValue): Unit = print {
     breadcrumbHeader + traceException(new Exception).tail.take(limit).mkString("\n") + "\n" + resetColor
   }
 
   def sleep(millis: Long): Unit = sleep("", millis)
 
   def sleep(name: String, millis: Long): Unit = {
-    printer(s"$resetColor$timePrefix-> ⏱  ${millis}ms" + s" $name".stripSuffix(" ") + " " + breadcrumbSidebar)
+    print(s"$resetColor$timePrefix-> ⏱  ${millis}ms" + s" $name".stripSuffix(" ") + " " + breadcrumbSidebar)
     Thread.sleep(millis)
   }
 
@@ -40,11 +44,11 @@ class Debugger(
     val start = System.currentTimeMillis()
     val result = f
     val millis = System.currentTimeMillis() - start
-    printer(s"$resetColor$timePrefix-> ⏱  ${millis}ms" + s" $name".stripSuffix(" ") + " " + breadcrumbSidebar)
+    print(s"$resetColor$timePrefix-> ⏱  ${millis}ms" + s" $name".stripSuffix(" ") + " " + breadcrumbSidebar)
     result
   }
 
-  def table(header: Seq[String], rows: Seq[Any]*): Unit = printer {
+  def table(header: Seq[String], rows: Seq[Any]*): Unit = print {
     breadcrumbHeader + formatter(header, rows: _*)
   }
 

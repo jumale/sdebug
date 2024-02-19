@@ -14,6 +14,7 @@ final case class Formatter(
     indentSize = settings.indentSize,
     maxWidth = settings.maxWidth,
     multiline = settings.multiline,
+    showNames = settings.showNames,
     colorize = settings.colorize
   )
 
@@ -81,6 +82,7 @@ object Formatter {
     indentSize: Int,
     maxWidth: Int,
     multiline: Boolean,
+    showNames: Boolean,
     colorize: Boolean,
     palette: Palette,
     defaultColor: Colors,
@@ -103,12 +105,14 @@ object Formatter {
       indentSize: Int = 2,
       maxWidth: Int = 120,
       multiline: Boolean = true,
+      showNames: Boolean = true,
       colorize: Boolean = true,
       palette: Palette = Palette.default
     ): Settings = Settings(
       indentSize = indentSize,
       maxWidth = maxWidth,
       multiline = multiline,
+      showNames = showNames,
       colorize = colorize,
       palette = palette,
       defaultColor = Colors(palette.reset, palette.reset, palette.reset),

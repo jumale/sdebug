@@ -310,6 +310,9 @@ object Node {
       else
         super.render
 
+    override protected def fieldsOneLine(implicit p: RenderParams): String =
+      if (p.showNames) super.fieldsOneLine(p) else renderFields(p, p)(_._2).mkString(sep)
+
     override protected def emptyState(implicit p: RenderParams): String =
       classColor + name.stripSuffix("$")
   }
