@@ -1,34 +1,42 @@
 package com.github.jumale.sdebug
 
-import com.github.jumale.sdebug.Node._
+import com.github.jumale.sdebug.FmtNode._
 
 import scala.collection.{immutable, mutable}
 import scala.concurrent.Future
 import scala.util.Try
 
 final case class Formatter(
-  settings: Formatter.Settings = Formatter.Settings(),
-  extend: PartialFunction[(Any, Formatter), Node[Any]] = PartialFunction.empty
+  settings: Formatter.Settings = Formatter.Settings.default(),
+  extend: PartialFunction[(Any, Formatter), FmtNode[Any]] = PartialFunction.empty
 ) {
   private val renderParams: RenderParams = RenderParams( //
     indentSize = settings.indentSize,
     maxWidth = settings.maxWidth,
     multiline = settings.multiline,
-    showNames = settings.showNames,
+    showKeys = settings.showKeys,
     colorize = settings.colorize
   )
 
-  def apply(value: Any): String =
-    toNode(value).render(renderParams) + settings.palette.reset
+  private def resetColor = settings.defaultColor.reset(renderParams)
 
-  def apply(actual: Any, expected: Any): String =
-    Node.diff(toNode(actual), toNode(expected), settings.diffColors).render(renderParams)
+  /** Format a single value to string.
+    */
+  def value(v: Any): String =
+    toNode(v).render(renderParams) + resetColor
 
-  def apply(header: Seq[String], rows: Seq[Any]*): String =
-    Table(header, rows.map(_.map(toNode)), settings.tableColor).render(renderParams)
+  /** Format a diff between two values.
+    */
+  def diff(prev: Any, next: Any): String =
+    FmtNode.diff(toNode(prev), toNode(next), settings.diffColors).render(renderParams) + resetColor
+
+  /** Format a table to string.
+    */
+  def table(header: String*)(rows: Seq[Any]*): String =
+    Table(header, rows.map(_.map(toNode)), settings.tableColor).render(renderParams) + resetColor
 
   // noinspection DuplicatedCode
-  def toNode(value: Any): Node[Any] =
+  def toNode(value: Any): FmtNode[Any] =
     value match {
       case v if extend.isDefinedAt(v, this) => extend.apply(v, this)
 
@@ -41,9 +49,9 @@ final case class Formatter(
       case n: Double              => NumberNode(n, settings.numColor)
       case n: Float               => NumberNode(n, settings.numColor)
       case b: Boolean             => BooleanNode(b, settings.boolColor)
-      case o: Option[_]           => OptionNode(o.map(toNode), settings.enumColor)
-      case e: Either[_, _]        => EitherNode(e.map(toNode).left.map(toNode), settings.enumColor)
-      case e: Try[_]              => TryNode(e.map(toNode), settings.enumColor, settings.errorColor)
+      case o: Option[_]           => OptionNode(o.map(toNode), settings.coproductColor)
+      case e: Either[_, _]        => EitherNode(e.map(toNode).left.map(toNode), settings.coproductColor)
+      case e: Try[_]              => TryNode(e.map(toNode), settings.coproductColor, settings.errorColor)
       case s: immutable.Seq[_]    => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
       case s: immutable.Set[_]    => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
       case m: immutable.Map[_, _] => MapNode(m.getClass, m.toVector.map(a => toNode(a._1) -> toNode(a._2)), settings.mapColor)
@@ -63,7 +71,7 @@ final case class Formatter(
 
         // if fields look like tuple
         else if (fields.nonEmpty && fields.forall(_.matches("^_\\d(\\$.*)?$")))
-          CollectionNode(p.getClass, values.map(toNode), settings.enumColor)
+          CollectionNode(p.getClass, values.map(toNode), settings.coproductColor)
         // otherwise it's an object
         else
           ObjectNode( //
@@ -78,56 +86,96 @@ final case class Formatter(
 }
 
 object Formatter {
+
+  /** @param indentSize
+    *   Number of spaces for each level of indentation.
+    * @param maxWidth
+    *   Maximum width of a single line. Values that exceed this width will be split into multiple lines.
+    * @param multiline
+    *   Set it as FALSE to force-render all values as single-line, even if they exceed maxWidth.
+    * @param showKeys
+    *   Set it as FALSE to hide keys in maps and field-names in objects.
+    * @param colorize
+    *   Set it as FALSE to disable colors but keep formatting.
+    * @param palette
+    *   Colors palette for coloring output.
+    * @param defaultColor
+    *   Colors for default nodes (not mentioned in any further categories).
+    * @param strColor
+    *   Colors for string nodes.
+    * @param numColor
+    *   Colors for number nodes.
+    * @param coproductColor
+    *   Colors for standard coproduct-like nodes (Option, Either, Try, tuples).
+    * @param futureColor
+    *   Colors for Future nodes.
+    * @param boolColor
+    *   Colors for boolean nodes.
+    * @param nullColor
+    *   Colors for Java null nodes.
+    * @param arrColor
+    *   Colors for array-like nodes.
+    * @param mapColor
+    *   Colors for map-like nodes.
+    * @param objColor
+    *   Colors for object-like nodes.
+    * @param errorColor
+    *   Colors for error nodes.
+    * @param diffColors
+    *   Colors for diff nodes.
+    * @param tableColor
+    *   Colors for table nodes.
+    */
   final case class Settings(
     indentSize: Int,
     maxWidth: Int,
     multiline: Boolean,
-    showNames: Boolean,
+    showKeys: Boolean,
     colorize: Boolean,
     palette: Palette,
-    defaultColor: Colors,
-    strColor: Colors,
-    numColor: Colors,
-    enumColor: Colors,
-    futureColor: Colors,
-    boolColor: Colors,
-    nullColor: Colors,
-    arrColor: Colors,
-    mapColor: Colors,
-    objColor: Colors,
-    errorColor: Colors,
-    diffColors: Colors,
-    tableColor: Colors
+    defaultColor: NodeColors,
+    strColor: NodeColors,
+    numColor: NodeColors,
+    coproductColor: NodeColors,
+    futureColor: NodeColors,
+    boolColor: NodeColors,
+    nullColor: NodeColors,
+    arrColor: NodeColors,
+    mapColor: NodeColors,
+    objColor: NodeColors,
+    errorColor: NodeColors,
+    diffColors: NodeColors,
+    tableColor: NodeColors
   )
 
   object Settings {
-    def apply(
+    def default(
       indentSize: Int = 2,
       maxWidth: Int = 120,
       multiline: Boolean = true,
       showNames: Boolean = true,
       colorize: Boolean = true,
-      palette: Palette = Palette.default
+      palette: Palette = Palette.console
     ): Settings = Settings(
       indentSize = indentSize,
       maxWidth = maxWidth,
       multiline = multiline,
-      showNames = showNames,
+      showKeys = showNames,
       colorize = colorize,
       palette = palette,
-      defaultColor = Colors(palette.reset, palette.reset, palette.reset),
-      strColor = Colors(palette.green, palette.black, palette.reset),
-      numColor = Colors(palette.cyan, palette.reset, palette.reset),
-      enumColor = Colors(palette.magenta, palette.reset, palette.reset),
-      futureColor = Colors(palette.cyan, palette.red, palette.reset),
-      boolColor = Colors(palette.red, palette.reset, palette.reset),
-      nullColor = Colors(palette.red + palette.bold, palette.reset, palette.reset),
-      arrColor = Colors(palette.blue, palette.blue + palette.underlined, palette.reset),
-      mapColor = Colors(palette.cyan, palette.cyan + palette.underlined, palette.reset),
-      objColor = Colors(palette.yellow, palette.reset, palette.reset),
-      errorColor = Colors(palette.yellow, palette.red, palette.reset),
-      diffColors = Colors(palette.greenBg + palette.white, palette.redBg + palette.white, palette.reset),
-      tableColor = Colors(palette.black, palette.yellow, palette.reset)
+      defaultColor = NodeColors(palette.reset, palette.reset, palette.reset),
+      strColor = NodeColors(palette.green, palette.black, palette.reset),
+      numColor = NodeColors(palette.cyan, palette.reset, palette.reset),
+      coproductColor = NodeColors(palette.magenta, palette.reset, palette.reset),
+      futureColor = NodeColors(palette.cyan, palette.red, palette.reset),
+      boolColor = NodeColors(palette.red, palette.reset, palette.reset),
+      nullColor = NodeColors(palette.red + palette.bold, palette.reset, palette.reset),
+      arrColor = NodeColors(palette.blue, palette.blue + palette.underlined, palette.reset),
+      mapColor = NodeColors(palette.cyan, palette.yellow, palette.reset),
+      objColor = NodeColors(palette.yellow, palette.blue, palette.reset),
+      errorColor = NodeColors(palette.yellow, palette.red, palette.reset),
+      diffColors = NodeColors(palette.greenBg + palette.white, palette.redBg + palette.white, palette.reset),
+      tableColor = NodeColors(palette.black, palette.yellow, palette.reset)
     )
   }
 }

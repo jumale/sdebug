@@ -3,13 +3,14 @@ package com.github.jumale.sdebug
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
-trait Node[+T] {
+/** An AST-node for representing formatted values. */
+trait FmtNode[+T] {
   def value: T
   def render(implicit p: RenderParams): String
 }
 
-object Node {
-  def diff(actual: Node[Any], expected: Node[Any], colors: Colors): Node[Any] =
+object FmtNode {
+  def diff(actual: FmtNode[Any], expected: FmtNode[Any], colors: NodeColors): FmtNode[Any] =
     (expected, actual) match {
       case (x, y) if x.value == y.value => x
 
@@ -17,7 +18,7 @@ object Node {
         if (x.name != y.name)
           DiffNode(Some(x), Some(y), colors)
         else {
-          val (source: Vector[Node[Any]], target: Vector[Node[Any]], direction: Boolean) =
+          val (source: Vector[FmtNode[Any]], target: Vector[FmtNode[Any]], direction: Boolean) =
             if (x.value.size >= y.value.size)
               (x.value.toVector, y.value.toVector, true)
             else
@@ -37,8 +38,8 @@ object Node {
         if (x.name != y.name)
           DiffNode(Some(x), Some(y), colors)
         else {
-          val xm: Map[Node[Any], Node[Any]] = x.value.toMap
-          val ym: Map[Node[Any], Node[Any]] = y.value.toMap
+          val xm: Map[FmtNode[Any], FmtNode[Any]] = x.value.toMap
+          val ym: Map[FmtNode[Any], FmtNode[Any]] = y.value.toMap
           x.copy(value = (xm.keySet ++ ym.keySet).map { key =>
             (xm.get(key), ym.get(key)) match {
               case (Some(l), None)    => DiffNode(Some(key), None, colors) -> l
@@ -54,8 +55,8 @@ object Node {
         if (x.name != y.name)
           DiffNode(Some(x), Some(y), colors)
         else {
-          val xm: Map[Node[Any], Node[Any]] = x.value.toMap
-          val ym: Map[Node[Any], Node[Any]] = y.value.toMap
+          val xm: Map[FmtNode[Any], FmtNode[Any]] = x.value.toMap
+          val ym: Map[FmtNode[Any], FmtNode[Any]] = y.value.toMap
           x.copy(value = (xm.keySet ++ ym.keySet).map { key =>
             (xm.get(key), ym.get(key)) match {
               case (Some(l), None)    => DiffNode(Some(key), None, colors) -> l
@@ -69,13 +70,13 @@ object Node {
       case _ => DiffNode(Some(expected), Some(actual), colors)
     }
 
-  final case class DiffNode(a: Option[Node[Any]], b: Option[Node[Any]], colors: Colors) extends Node[Any] {
+  final case class DiffNode(a: Option[FmtNode[Any]], b: Option[FmtNode[Any]], colors: NodeColors) extends FmtNode[Any] {
     def value: Any = a.map(_.value).orElse(b.map(_.value)).orNull
 
-    private def added(v: Node[Any])(implicit p: RenderParams): String =
+    private def added(v: FmtNode[Any])(implicit p: RenderParams): String =
       colors.primary + v.render(p.copy(colorize = false)) + colors.reset
 
-    private def removed(v: Node[Any])(implicit p: RenderParams): String =
+    private def removed(v: FmtNode[Any])(implicit p: RenderParams): String =
       colors.secondary + v.render(p.copy(colorize = false)) + colors.reset
 
     override def render(implicit p: RenderParams): String =
@@ -87,18 +88,18 @@ object Node {
       }
   }
 
-  trait SimpleNode[+T] extends Node[T] {
+  trait SimpleNode[+T] extends FmtNode[T] {
     def value: T
-    def colors: Colors
+    def colors: NodeColors
     def render(implicit p: RenderParams): String = colors.primary + value.toString
   }
 
-  final case class RawNode(value: Any, colors: Colors) extends SimpleNode[Any]
-  final case class NumberNode(value: Any, colors: Colors) extends SimpleNode[Any]
-  final case class BooleanNode(value: Boolean, colors: Colors) extends SimpleNode[Boolean]
-  final case class NullNode(colors: Colors) extends SimpleNode[Any] { val value: Any = "null" }
+  final case class RawNode(value: Any, colors: NodeColors) extends SimpleNode[Any]
+  final case class NumberNode(value: Any, colors: NodeColors) extends SimpleNode[Any]
+  final case class BooleanNode(value: Boolean, colors: NodeColors) extends SimpleNode[Boolean]
+  final case class NullNode(colors: NodeColors) extends SimpleNode[Any] { val value: Any = "null" }
 
-  final case class StringNode(value: String, colors: Colors) extends Node[String] {
+  final case class StringNode(value: String, colors: NodeColors) extends FmtNode[String] {
     def render(implicit p: RenderParams): String =
       open + value.replaceAll("([\r\n]+)", "$1" + colors.primary) + close
 
@@ -116,22 +117,23 @@ object Node {
       else "\""
   }
 
-  final case class OptionNode[T](value: Option[Node[T]], colors: Colors) extends Node[Option[Node[T]]] {
+  final case class OptionNode[T](value: Option[FmtNode[T]], colors: NodeColors) extends FmtNode[Option[FmtNode[T]]] {
     def render(implicit p: RenderParams): String = colors.primary + (value match {
       case Some(v) => "Some(" + v.render + colors.primary + ")"
       case None    => "None"
     })
   }
 
-  final case class TryNode[T](value: Try[Node[T]], colors: Colors, errorColors: Colors) extends Node[Try[Node[T]]] {
+  final case class TryNode[T](value: Try[FmtNode[T]], colors: NodeColors, errorColors: NodeColors)
+      extends FmtNode[Try[FmtNode[T]]] {
     def render(implicit p: RenderParams): String = colors.primary + (value match {
       case Success(v) => "Success(" + v.render + colors.primary + ")"
       case Failure(e) => "Failure(" + ErrorNode(e, errorColors).render + ")"
     })
   }
 
-  final case class EitherNode[L, R](value: Either[Node[L], Node[R]], colors: Colors)
-      extends Node[Either[Node[L], Node[R]]] {
+  final case class EitherNode[L, R](value: Either[FmtNode[L], FmtNode[R]], colors: NodeColors)
+      extends FmtNode[Either[FmtNode[L], FmtNode[R]]] {
     def render(implicit p: RenderParams): String = colors.primary + (value match {
       case Left(v)  => "Left(" + v.render
       case Right(v) => "Right(" + v.render
@@ -140,10 +142,10 @@ object Node {
 
   final case class FutureNode[T](
     value: Future[T],
-    resultToNode: Try[T] => Node[Any],
-    colors: Colors,
-    errorColors: Colors
-  ) extends Node[Future[T]] {
+    resultToNode: Try[T] => FmtNode[Any],
+    colors: NodeColors,
+    errorColors: NodeColors
+  ) extends FmtNode[Future[T]] {
     def render(implicit p: RenderParams): String = {
       val inner = value.value match {
         case None         => colors.secondary + "<not completed>"
@@ -157,10 +159,10 @@ object Node {
 
   final case class CollectionNode[T](
     clazz: Class[_],
-    value: Iterable[Node[T]],
-    colors: Colors,
+    value: Iterable[FmtNode[T]],
+    colors: NodeColors,
     customName: Option[String] = None
-  ) extends Node[Iterable[Node[T]]] {
+  ) extends FmtNode[Iterable[FmtNode[T]]] {
     def render(implicit p: RenderParams): String =
       if (value.isEmpty)
         classColor + name + colors.reset + colors.primary + ".empty"
@@ -226,12 +228,12 @@ object Node {
       else colors.primary + ", \n"
   }
 
-  trait KeyValNode[K, V] extends Node[Vector[(Node[K], Node[V])]] {
+  trait KeyValNode[K, V] extends FmtNode[Vector[(FmtNode[K], FmtNode[V])]] {
     def name: String
 
-    def colors: Colors
+    def colors: NodeColors
 
-    def value: Vector[(Node[K], Node[V])]
+    def value: Vector[(FmtNode[K], FmtNode[V])]
 
     def render(implicit p: RenderParams): String =
       if (value.isEmpty)
@@ -254,9 +256,9 @@ object Node {
     protected def open(implicit p: RenderParams): String = s"$classColor$name${colors.reset}${colors.primary}("
     protected def close(implicit p: RenderParams): String = colors.primary + ")"
     protected def sep(implicit p: RenderParams): String = colors.primary + ", "
-    protected def eq(implicit p: RenderParams): String = colors.primary + "="
-    protected def renderKey(k: Node[K])(implicit p: RenderParams): String = k.render
-    protected def renderVal(v: Node[V])(implicit p: RenderParams): String = v.render
+    protected def eq(implicit p: RenderParams): String = colors.secondary + "="
+    protected def renderKey(k: FmtNode[K])(implicit p: RenderParams): String = k.render
+    protected def renderVal(v: FmtNode[V])(implicit p: RenderParams): String = v.render
 
     protected def renderFields[T](kp: RenderParams, vp: RenderParams)(fn: ((String, String)) => T): Iterable[T] =
       value.map(f => fn(renderKey(f._1)(kp) -> renderVal(f._2)(vp)))
@@ -277,11 +279,11 @@ object Node {
 
   final case class MapNode[K, V](
     clazz: Class[_],
-    value: Vector[(Node[K], Node[V])],
-    colors: Colors,
+    value: Vector[(FmtNode[K], FmtNode[V])],
+    colors: NodeColors,
     customName: Option[String] = None
   ) extends KeyValNode[K, V] {
-    override def eq(implicit p: RenderParams): String = colors.primary + "->"
+    override def eq(implicit p: RenderParams): String = colors.secondary + "->"
 
     override protected def classColor(implicit p: RenderParams): String =
       if (clazz.getName.contains(".mutable.")) colors.secondary else colors.primary
@@ -296,13 +298,14 @@ object Node {
 
   final case class ObjectNode(
     clazz: Class[_],
-    value: Vector[(Node[Any], Node[Any])],
-    colors: Colors,
+    value: Vector[(FmtNode[Any], FmtNode[Any])],
+    colors: NodeColors,
     customName: Option[String] = None
   ) extends KeyValNode[Any, Any] {
     override def name: String = customName.getOrElse(clazz.getSimpleName).replace("$1", "")
 
-    override protected def renderKey(k: Node[Any])(implicit p: RenderParams): String = colors.reset + k.value.toString
+    override protected def renderKey(k: FmtNode[Any])(implicit p: RenderParams): String =
+      colors.secondary + k.value.toString
 
     override def render(implicit p: RenderParams): String =
       if (value.size == 1) // render without field-names if it's a single-field-class
@@ -311,20 +314,20 @@ object Node {
         super.render
 
     override protected def fieldsOneLine(implicit p: RenderParams): String =
-      if (p.showNames) super.fieldsOneLine(p) else renderFields(p, p)(_._2).mkString(sep)
+      if (p.showKeys) super.fieldsOneLine(p) else renderFields(p, p)(_._2).mkString(sep)
 
     override protected def emptyState(implicit p: RenderParams): String =
       classColor + name.stripSuffix("$")
   }
 
-  final case class ErrorNode(value: Throwable, colors: Colors) extends Node[Throwable] {
+  final case class ErrorNode(value: Throwable, colors: NodeColors) extends FmtNode[Throwable] {
     override def render(implicit p: RenderParams): String =
       if (singleLine(p.noColors).length <= p.rightBorder || !p.multiline)
         singleLine
       else
         multiLine
 
-    private val msgColors: Colors = Colors( //
+    private val msgColors: NodeColors = NodeColors( //
       primaryColor = colors.secondaryColor,
       secondaryColor = colors.resetColor,
       resetColor = colors.resetColor

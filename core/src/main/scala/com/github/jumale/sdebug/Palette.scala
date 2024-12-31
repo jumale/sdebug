@@ -1,11 +1,5 @@
 package com.github.jumale.sdebug
 
-final case class Colors(primaryColor: String, secondaryColor: String, resetColor: String) {
-  def primary(implicit p: RenderParams): String = if (p.colorize) primaryColor else ""
-  def secondary(implicit p: RenderParams): String = if (p.colorize) secondaryColor else ""
-  def reset(implicit p: RenderParams): String = if (p.colorize) resetColor else ""
-}
-
 final case class Palette(
   black: String,
   red: String,
@@ -29,7 +23,7 @@ final case class Palette(
 )
 
 object Palette {
-  lazy val default: Palette = Palette(
+  lazy val console: Palette = Palette(
     black = Console.BLACK,
     red = Console.RED,
     green = Console.GREEN,
@@ -70,6 +64,6 @@ object Palette {
     whiteBg = "[b:w]",
     bold = "[d]",
     underlined = "[u]",
-    reset = "[t]"
+    reset = "[R]"
   )
 }

@@ -1,6 +1,6 @@
 package com.github.jumale.sdebug
 
-final case class Cell(x: Int, y: Int, value: Node[Any], width: Int = 0, height: Int = 0) {
+final case class Cell(x: Int, y: Int, value: FmtNode[Any], width: Int = 0, height: Int = 0) {
   lazy val contentWidth: Int = rawLines.map(_.length).max
   lazy val contentHeight: Int = rawLines.length
   lazy val outerWidth: Int = width + 3
@@ -9,7 +9,7 @@ final case class Cell(x: Int, y: Int, value: Node[Any], width: Int = 0, height: 
     value.render(RenderParams(colorize = false, simplified = true, maxWidth = 80)).split("\n").toVector
   }
 
-  def render(colors: Colors)(implicit p: RenderParams): Vector[String] = {
+  def render(colors: NodeColors)(implicit p: RenderParams): Vector[String] = {
     val header: String = colors.primary + ("-" * outerWidth)
     val content: Vector[String] = value
       .render(p.copy(simplified = true, maxWidth = 80))
@@ -25,15 +25,15 @@ final case class Cell(x: Int, y: Int, value: Node[Any], width: Int = 0, height: 
   }
 }
 
-final case class Table(header: Seq[String], rows: Seq[Seq[Node[Any]]], colors: Colors) {
-  private lazy val headerColors = Colors(colors.secondaryColor, colors.resetColor, colors.resetColor)
+final case class Table(header: Seq[String], rows: Seq[Seq[FmtNode[Any]]], colors: NodeColors) {
+  private lazy val headerColors = NodeColors(colors.secondaryColor, colors.resetColor, colors.resetColor)
 
   def render(implicit p: RenderParams): String = {
-    val allRows = header.map(v => Node.RawNode(v, headerColors)) +: rows
+    val allRows = header.map(v => FmtNode.RawNode(v, headerColors)) +: rows
 
     val maxRowSize = allRows.map(_.size).max
     def pad(y: Int, row: Vector[Cell]): Vector[Cell] =
-      row ++ (row.size until maxRowSize).map(x => Cell(x, y, Node.RawNode("", colors)))
+      row ++ (row.size until maxRowSize).map(x => Cell(x, y, FmtNode.RawNode("", colors)))
 
     val cells = allRows.toVector.zipWithIndex.flatMap { case (row, y) =>
       pad(y, row.toVector.zipWithIndex.map { case (node, x) => Cell(x, y, node) })

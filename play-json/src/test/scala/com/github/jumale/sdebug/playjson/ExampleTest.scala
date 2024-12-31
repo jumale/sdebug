@@ -28,7 +28,7 @@ class ExampleTest extends AnyWordSpec {
     )
   )
 
-  "dump json" in {
-    debug.dump(example)
+  "debug json" in {
+    debug.print(example)
   }
 }

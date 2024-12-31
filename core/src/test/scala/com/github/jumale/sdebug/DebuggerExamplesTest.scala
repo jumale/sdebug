@@ -8,7 +8,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
-class ExampleTest extends AnyWordSpec {
+class DebuggerExamplesTest extends AnyWordSpec {
   val debug: Debugger = new Debugger()
 
   final case class Root(
@@ -17,7 +17,7 @@ class ExampleTest extends AnyWordSpec {
     falseBool: Boolean = false,
     nullVal: String = null,
     numbers: Numbers = Numbers(),
-    enums: Enums = Enums(),
+    coproducts: Coproducts = Coproducts(),
     emptyCollections: Collections = Collections(
       seq = Seq.empty,
       list = List.empty,
@@ -61,7 +61,7 @@ class ExampleTest extends AnyWordSpec {
     float: Float = 42.02f
   )
 
-  final case class Enums(
+  final case class Coproducts(
     some: Option[Int] = Some(42),
     none: Option[Int] = None,
     left: Either[String, Int] = Left("foo"),
@@ -114,17 +114,17 @@ class ExampleTest extends AnyWordSpec {
     debug.log("lorem ipsum")
   }
 
-  "full dump" in {
-    debug.dump(example)
+  "debug values" in {
+    debug.print(example)
   }
 
-  "dump root exception" in {
-    debug.dump(new NullPointerException("exception message"))
+  "debug root exception" in {
+    debug.print(new NullPointerException("exception message"))
   }
 
-  "dump root custom exception" in {
+  "debug root custom exception" in {
     final case class MyException(msg: String, level: Int) extends RuntimeException(msg)
-    debug.dump(MyException("exception message", 42))
+    debug.print(MyException("exception message", 42))
   }
 
   "diff" in {
@@ -181,10 +181,13 @@ class ExampleTest extends AnyWordSpec {
     debug.sleep(200)
   }
 
+  "named sleep" in {
+    debug.sleep("foo", 200)
+  }
+
   final case class CellVal(a: String, b: Int)
   "table" in {
-    debug.table(
-      Seq("", "H1", "H2", "H3 the longest by header"),
+    debug.table("", "H1", "H2", "H3 the longest by header")(
       Seq(
         "foo",
         "V1",
@@ -205,8 +208,7 @@ class ExampleTest extends AnyWordSpec {
   }
 
   "table simple" in {
-    debug.table(
-      Seq("Name", "Value"),
+    debug.table("Name", "Value")(
       Seq("string", "foo"),
       Seq("tuple", (42, Left(None))),
       Seq("bool", false),

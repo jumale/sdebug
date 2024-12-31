@@ -5,63 +5,71 @@ It is my personal util-library which I use for debugging in my daily work (mostl
 a single function `prettyFormat` ([inspired by this gist](https://gist.github.com/carymrobbins/7b8ed52cd6ea186dbdf8)) 
 and eventually grew into my personal tool-kit.
 
-### Use case
-I use this library during development when writing/debugging tests and code in Intellij IDE.<br>
-Sometimes it's even quicker and looks better than native debugging in IDE with break-points, and sometimes it's the only way to debug
-if IDE fails to run/debug code because of some internal configuration problems.<br>
-All functions in this library also print breadcrumbs, which is recognised by Intellij as a code-link, so that it's easy to find
-and remove all debugging before committing changes.<br>
-I always use this library as a globally installed package on my machine - this way I always ensure that if I forget to
-delete any of my prints before commit/push, then a CI build should fail and send me a notification (because this library exists 
-only on the developer's machine).
+I prefer installing this library via `global.sbt` - this allows me to use it in any project, and also ensures that I do
+not forget to remove prints from my code (because forgotten prints will cause a compilation error in CI which does not know about this library).
 
-### Installation
-This is my default way of installation, assuming that I use PlayJson and Scalatest in all my projects:
+## Installation
+
 - clone this project locally
 - go to the root folder and run `sbt +publishLocal`
-- create if not exists `~/.sbt/1.0/global.sbt` (or `~/.sbt/0.13/global.sbt` for older SBT) with contents:
-```scala
-libraryDependencies ++= Seq(
-  "com.github.jumale" %% "sdebug-core"      % "0.1.0-SNAPSHOT",
-  "com.github.jumale" %% "sdebug-play-json" % "0.1.0-SNAPSHOT",
-  "com.github.jumale" %% "sdebug-scalatest" % "0.1.0-SNAPSHOT",
-  "com.github.jumale" %% "sdebug-shortcut"  % "0.1.0-SNAPSHOT"
-)
-```
-The `sdebug-shortcut` package is the aggregation of core, play-json and scalatest with a shortcut access to functions
-like `sdebug.functioName(...)`. If you do not need play-json or scalatest, or need support for some other libraries - then
-you can just use the core library and extend it the way you need.
+- create if not exists `~/.sbt/1.0/global.sbt` (or `~/.sbt/0.13/global.sbt` for older SBT)
+- install one of the versions:
+  - an extended version with PlayJson and Scalatest support:
+    ```scala
+    libraryDependencies ++= Seq(
+      "com.github.jumale" %% "sdebug-impl-ext"  % "0.3.0-SNAPSHOT"
+    )
+    ```
+  - or a pure version without any dependencies:
+    ```scala
+    libraryDependencies ++= Seq(
+      "com.github.jumale" %% "sdebug-impl"  % "0.3.0-SNAPSHOT"
+    )
+    ```
+- reload your SBT console
 
-### Functions
-You can find all these examples in the [ExampleTest.scala](./core/src/test/scala/com/github/jumale/sdebug/ExampleTest.scala).
+> Note: the extended version includes an extended printer for JsValue from PlayJson and provides an implementation of 
+> `org.scalactic.Prettifier` which can be optionally imported in Scalatest test-classes to make test-failures more readable.
+
+## Functions
+You can find all these examples in the [DebuggerExamplesTest.scala](./core/src/test/scala/com/github/jumale/sdebug/DebuggerExamplesTest.scala).
+
+---
+The debug-printer can be toggled off until the next toggle-on. 
+This is useful when you have multiple calls of the same debugged code, but you want to see the output of one specific call:
+```scala
+sdebug.off()
+// some code
+sdebug.on()
+```
 
 ---
 ```scala
-// just a simple log-message (helpful for tracing logic flows)
+// just a simple log-message
 sdebug.log(s"lorem ipsum")
 ```
 ![log](./doc/screenshot/log.png)
 
 ---
 ```scala
-// pretty-prints any variable
+// pretty-print any variable
 // the printed result is a valid Scala code, so it can be copy-pasted back to IDE if needed
-sdebug.dump(swagger)
-// also can print multiple values: sdebug.dump(foo, bar, baz)
+sdebug.print(swagger)
+// also can print multiple values: sdebug.print(foo, bar, baz)
 ```
 ![log](./doc/screenshot/dump.png)
 
 ---
 ```scala
 // exceptions are printed with stack-trace
-// the stack-trace length is limited to 10 by default but it can be changed via render-params 
-sdebug.dump(exception)
+// the stack-trace length is limited to 10 by default, but it can be changed via setter 'sdebug.setErrorTraceLimit(20)'
+sdebug.print(exception)
 ```
 ![log](./doc/screenshot/dumpException.png)
 
 ---
 ```scala
-// prints diffs between two values
+// print diffs between two values
 // the diff is calculated recursively, and shows precisely which key or value has been changed/added/deleted
 sdebug.diff(left, right)
 ```
@@ -97,14 +105,16 @@ sdebug.table(
 ---
 ```scala
 // measures execution time of the provided code-block 
-// also supports custom name: sdebug.measure("customName")(myFunction())
+// also supports custom name: `sdebug.measure("customName")(myFunction())`
 sdebug.measure(myFunction())
 ```
 ![log](./doc/screenshot/sleep.png)
 
 ---
 ```scala
-// same as 'dump', but saves results into the specified file instead of printing
-// the result is also de-colorized
-sdebug.save("filename.txt")(foo, bar, baz)
+// format a value, but instead of printing save it to a file
+sdebug.formatAndSave("filename.txt")(value)
+// also supports multiple values :`sdebug.formatAndSave("filename.txt")(foo, bar, baz)`
+// the default file location is `./target` (i.e. the file from the example will be saved to `./target/filename.txt`)
+// the location can be changed via settings when manually creating a new instance of Debugger
 ```

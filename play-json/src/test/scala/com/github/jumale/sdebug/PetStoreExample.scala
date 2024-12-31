@@ -44,7 +44,7 @@ class PetStoreExample extends AnyWordSpec {
   )
 
   "print" in {
-    debug.dump(swagger)
+    debug.print(swagger)
   }
 
   "diff" in {

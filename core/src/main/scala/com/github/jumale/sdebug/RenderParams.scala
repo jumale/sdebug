@@ -1,26 +1,26 @@
 package com.github.jumale.sdebug
 
 /** @param depth
-  *   current level of depth (for recursive rendering)
+  *   Current level of depth (for recursive rendering).
   * @param indentSize
-  *   amount of spaces to indent a single level
+  *   Number of spaces for each level of indentation.
   * @param maxWidth
-  *   objects and collections will be rendered as single-line if they fit into this width
+  *   Maximum width of a single line. Values that exceed this width will be split into multiple lines.
   * @param multiline
-  *   set it to false to force render everything as single line
-  * @param showNames
-  *   set it to false to hide property names and only print values
+  *   Set it as FALSE to force-render all values as single-line, even if they exceed maxWidth.
+  * @param showKeys
+  *   Set it as FALSE to hide keys in maps and field-names in objects.
   * @param colorize
-  *   disables colors but keeps formatting
+  *   Set it as FALSE to disable colors but keep formatting.
   * @param simplified
-  *   some values support raw mode (e.g. strings are rendered without quotes)
+  *   Some values support an expanded and a simplified formatting mode. Set it as TRUE to force simplified mode.
   */
-final case class RenderParams( //
+final case class RenderParams(
   depth: Int = 0,
   indentSize: Int = 2,
   maxWidth: Int = 120,
   multiline: Boolean = true,
-  showNames: Boolean = true,
+  showKeys: Boolean = true,
   colorize: Boolean = true,
   simplified: Boolean = false
 ) {

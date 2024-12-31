@@ -1,19 +1,20 @@
-lazy val scala212 = "2.12.18"
-lazy val scala213 = "2.13.11"
+lazy val scala212 = "2.12.19"
+lazy val scala213 = "2.13.14"
 lazy val supportedScalaVersions = List(scala212, scala213)
 
 ThisBuild / scalaVersion := scala213
-ThisBuild / version := "0.2.0-SNAPSHOT"
+ThisBuild / version := "0.3.0-SNAPSHOT"
 ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / organization := "com.github.jumale"
 ThisBuild / homepage := Some(url("https://github.com/jumale/sdebug"))
 ThisBuild / licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0"))
 
-lazy val scalaTest = "org.scalatest" %% "scalatest" % "3.2.15"
-lazy val playJson = "com.typesafe.play" %% "play-json" % "2.9.4"
+lazy val scalaTest = "org.scalatest" %% "scalatest" % "3.2.19"
+lazy val scalactic = "org.scalactic" %% "scalactic" % "3.2.19"
+lazy val playJson = "com.typesafe.play" %% "play-json" % "2.10.5"
 
 lazy val root = (project in file("."))
-  .aggregate(core, playJsonSupport, scalatestSupport, shortcut)
+  .aggregate(core, playJsonSupport, scalacticSupport, impl, implExt)
   .settings(name := "sdebug")
 
 lazy val core = (project in file("./core"))
@@ -31,19 +32,28 @@ lazy val playJsonSupport = (project in file("./play-json"))
   )
   .dependsOn(core)
 
-lazy val scalatestSupport = (project in file("./scalatest"))
+lazy val scalacticSupport = (project in file("./scalactic"))
   .settings( //
-    name := "sdebug-scalatest",
+    name := "sdebug-scalactic",
     crossScalaVersions := supportedScalaVersions,
-    libraryDependencies ++= Seq(scalaTest)
+    libraryDependencies ++= Seq(scalaTest % Test, scalactic)
   )
   .dependsOn(core)
 
-lazy val shortcut = (project in file("./shortcut"))
+lazy val impl = (project in file("./impl"))
   .settings( //
-    name := "sdebug-shortcut",
-    crossScalaVersions := supportedScalaVersions
+    name := "sdebug-impl",
+    crossScalaVersions := supportedScalaVersions,
+    libraryDependencies ++= Seq(scalaTest % Test)
   )
-  .dependsOn(core, playJsonSupport, scalatestSupport)
+  .dependsOn(core)
+
+lazy val implExt = (project in file("./impl-ext"))
+  .settings( //
+    name := "sdebug-impl-ext",
+    crossScalaVersions := supportedScalaVersions,
+    libraryDependencies ++= Seq(scalaTest % Test)
+  )
+  .dependsOn(core, playJsonSupport, scalacticSupport)
 
 // See https://www.scala-sbt.org/1.x/docs/Using-Sonatype.html for instructions on how to publish to Sonatype.
