@@ -8,6 +8,7 @@ import org.scalactic.{Prettifier, PrettyPair}
 class SdebugScalacticPrettifier(
   fmt: Formatter = Formatter(),
   enableAnalysis: Boolean = true,
+  printAnalysis: Boolean = false,
   resetColors: Boolean = true,
   prefix: String = "",
   analysisPrefix: String = ""
@@ -20,6 +21,13 @@ class SdebugScalacticPrettifier(
   override def apply(left: Any, right: Any): PrettyPair = PrettyPair(
     left = left.toString,
     right = right.toString,
-    analysis = if (enableAnalysis) Some(analysisPrefix + fmt.diff(left, right) + reset) else None
+    analysis = {
+      lazy val value = analysisPrefix + fmt.diff(left, right) + reset
+      if (printAnalysis) {
+        println(value)
+      }
+
+      if (enableAnalysis) Some(value) else None
+    }
   )
 }

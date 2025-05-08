@@ -18,7 +18,12 @@ final case class Formatter(
     colorize = settings.colorize
   )
 
+  private var aliases: Map[Any, Any] = Map.empty
+
   private def resetColor = settings.defaultColor.reset(renderParams)
+
+  def addAlias(from: Any, to: Any): Unit =
+    aliases = aliases.updated(from, to)
 
   /** Format a single value to string.
     */
@@ -37,52 +42,58 @@ final case class Formatter(
 
   // noinspection DuplicatedCode
   def toNode(value: Any): FmtNode[Any] =
-    value match {
-      case v if extend.isDefinedAt(v, this) => extend.apply(v, this)
+    aliases.get(value) match {
+      case Some(alias) => toNode(alias)
+      case None =>
+        value match {
+          case v if extend.isDefinedAt(v, this) => extend.apply(v, this)
 
-      // scalafmt: { maxColumn = 170 }
-      case v if v == null         => NullNode(settings.nullColor)
-      case s: String              => StringNode(s, settings.strColor)
-      case n: Int                 => NumberNode(n, settings.numColor)
-      case n: Long                => NumberNode(n, settings.numColor)
-      case n: BigInt              => NumberNode(n, settings.numColor)
-      case n: Double              => NumberNode(n, settings.numColor)
-      case n: Float               => NumberNode(n, settings.numColor)
-      case b: Boolean             => BooleanNode(b, settings.boolColor)
-      case o: Option[_]           => OptionNode(o.map(toNode), settings.coproductColor)
-      case e: Either[_, _]        => EitherNode(e.map(toNode).left.map(toNode), settings.coproductColor)
-      case e: Try[_]              => TryNode(e.map(toNode), settings.coproductColor, settings.errorColor)
-      case s: immutable.Seq[_]    => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
-      case s: immutable.Set[_]    => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
-      case m: immutable.Map[_, _] => MapNode(m.getClass, m.toVector.map(a => toNode(a._1) -> toNode(a._2)), settings.mapColor)
-      case s: mutable.Seq[_]      => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
-      case s: mutable.Set[_]      => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
-      case m: mutable.Map[_, _]   => MapNode(m.getClass, m.toVector.map(a => toNode(a._1) -> toNode(a._2)), settings.mapColor)
-      case f: Future[_]           => FutureNode(f, toNode, settings.futureColor, settings.errorColor)
-      // scalafmt: { maxColumn = 120 }
+          // scalafmt: { maxColumn = 170 }
+          case v if v == null         => NullNode(settings.nullColor)
+          case s: String              => StringNode(s, settings.strColor)
+          case n: Int                 => NumberNode(n, settings.numColor)
+          case n: Long                => NumberNode(n, settings.numColor)
+          case n: BigInt              => NumberNode(n, settings.numColor)
+          case n: Double              => NumberNode(n, settings.numColor)
+          case n: Float               => NumberNode(n, settings.numColor)
+          case b: Boolean             => BooleanNode(b, settings.boolColor)
+          case o: Option[_]           => OptionNode(o.map(toNode), settings.coproductColor)
+          case e: Either[_, _]        => EitherNode(e.map(toNode).left.map(toNode), settings.coproductColor)
+          case e: Try[_]              => TryNode(e.map(toNode), settings.coproductColor, settings.errorColor)
+          case s: immutable.Seq[_]    => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
+          case s: immutable.Set[_]    => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
+          case m: immutable.Map[_, _] => MapNode(m.getClass, m.toVector.map(a => toNode(a._1) -> toNode(a._2)), settings.mapColor)
+          case s: mutable.Seq[_]      => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
+          case s: mutable.Set[_]      => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
+          case m: mutable.Map[_, _]   => MapNode(m.getClass, m.toVector.map(a => toNode(a._1) -> toNode(a._2)), settings.mapColor)
+          case f: Future[_]           => FutureNode(f, toNode, settings.futureColor, settings.errorColor)
+          // scalafmt: { maxColumn = 120 }
 
-      case p: Product =>
-        val fields = Util.getProductFields(p)
-        val values = p.productIterator.toVector
+          case p: Product =>
+            val fields = Util.getProductFields(p)
+            val values = p.productIterator.toVector
 
-        // If we weren't able to match up fields/values, fall back to raw node.
-        if (fields.length != values.length)
-          RawNode(p, settings.defaultColor)
+            // If we weren't able to match up fields/values, fall back to raw node.
+            if (fields.length != values.length)
+              RawNode(p, settings.defaultColor)
 
-        // if fields look like tuple
-        else if (fields.nonEmpty && fields.forall(_.matches("^_\\d(\\$.*)?$")))
-          CollectionNode(p.getClass, values.map(toNode), settings.coproductColor)
-        // otherwise it's an object
-        else
-          ObjectNode( //
-            p.getClass,
-            fields.zip(values).map { case (k, v) => toNode(k) -> toNode(v) },
-            settings.objColor
-          )
+            // if fields look like tuple
+            else if (fields.nonEmpty && fields.forall(_.matches("^_\\d(\\$.*)?$")))
+              CollectionNode(p.getClass, values.map(toNode), settings.coproductColor)
+            // otherwise it's an object
+            else
+              ObjectNode( //
+                clazz = p.getClass,
+                value = fields.zip(values).map { case (k, v) => toNode(k) -> toNode(v) },
+                colors = settings.objColor,
+                fullNestedClassNames = settings.fullNestedClassNames
+              )
 
-      case e: Throwable => ErrorNode(e, settings.errorColor)
-      case v            => RawNode(v, settings.defaultColor)
+          case e: Throwable => ErrorNode(e, settings.errorColor)
+          case v            => RawNode(v, settings.defaultColor)
+        }
     }
+
 }
 
 object Formatter {
@@ -132,6 +143,7 @@ object Formatter {
     multiline: Boolean,
     showKeys: Boolean,
     colorize: Boolean,
+    fullNestedClassNames: Boolean,
     palette: Palette,
     defaultColor: NodeColors,
     strColor: NodeColors,
@@ -155,6 +167,7 @@ object Formatter {
       multiline: Boolean = true,
       showNames: Boolean = true,
       colorize: Boolean = true,
+      fullNestedClassNames: Boolean = false,
       palette: Palette = Palette.console
     ): Settings = Settings(
       indentSize = indentSize,
@@ -163,6 +176,7 @@ object Formatter {
       showKeys = showNames,
       colorize = colorize,
       palette = palette,
+      fullNestedClassNames = fullNestedClassNames,
       defaultColor = NodeColors(palette.reset, palette.reset, palette.reset),
       strColor = NodeColors(palette.green, palette.black, palette.reset),
       numColor = NodeColors(palette.cyan, palette.reset, palette.reset),

@@ -114,8 +114,21 @@ class DebuggerExamplesTest extends AnyWordSpec {
     debug.log("lorem ipsum")
   }
 
-  "debug values" in {
+  "debug value" in {
     debug.print(example)
+  }
+
+  "debug values" in {
+    debug.print(example.string, example.numbers)
+    debug.print(example.string, example.numbers, example.trueBool)
+  }
+
+  "debug map" in {
+    debug.print( //
+      "string" -> example.string,
+      "numbers" -> example.numbers,
+      "trueBool" -> example.trueBool
+    )
   }
 
   "debug root exception" in {

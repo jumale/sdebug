@@ -1,6 +1,7 @@
 package com.github.jumale.sdebug
 
 import java.time.LocalTime
+import scala.collection.immutable.ListMap
 
 //noinspection ScalaWeakerAccess,ScalaUnusedSymbol
 class Debugger(
@@ -33,29 +34,63 @@ class Debugger(
   def setErrorTraceLimit(size: Int): Unit =
     settings = settings.copy(errorTraceLimit = size)
 
+  def showFullNestedClassNames(): Unit =
+    formatter = formatter.copy(settings = formatter.settings.copy(fullNestedClassNames = true))
+
+  def aliases(pairs: (Any, Any)*): Unit =
+    pairs.foreach { case (from, to) => formatter.addAlias(from, to) }
+
+  def print[T](v: T): T = {
+    formatAndPrint()(v)
+    v
+  }
+
+  def print(a: Any, b: Any, tail: Any*): Unit =
+    formatAndPrint()(Seq(a, b) ++ tail: _*)
+
+  def printIf[T](condition: Boolean)(v: T): T = {
+    formatAndPrint(condition)(v)
+    v
+  }
+
+  def printIf(condition: Boolean)(a: Any, b: Any, tail: Any*): Unit =
+    formatAndPrint(condition)(Seq(a, b) ++ tail)
+
+  private def formatAndPrint(condition: Boolean = true)(values: Any*): Unit =
+    if (condition)
+      doPrint(
+        breadcrumbHeader(idx = 4) +
+          asKeyValPairs(values)
+            .map(m => formatter.value(m).replaceFirst("Node", "") + footer(m))
+            .getOrElse(values.map(value => formatter.value(value) + footer(value)).mkString("\n"))
+      )
+
+  private def asKeyValPairs(values: Seq[Any]): Option[ListMap[Any, Any]] = {
+    val pairs: Seq[(Any, Any)] = values.collect { case Tuple2(k, v) => (k, v) }
+    if (pairs.size == values.size)
+      Some(ListMap(pairs: _*))
+    else
+      None
+  }
+
   /** Print a single-line message log. */
   def log(msg: String): Unit = doPrint {
     s"$timePrefix-> $msg ${breadcrumbSidebar()}"
   }
 
-  /** Format and print provided values */
-  def print(values: Any*): Unit = doPrint {
-    breadcrumbHeader + values.map(value => formatter.value(value) + footer(value)).mkString("\n")
-  }
-
   /** Print a diff between the two provided values. */
   def diff(prev: Any, next: Any): Unit = doPrint {
-    breadcrumbHeader + formatter.diff(prev, next)
+    breadcrumbHeader() + formatter.diff(prev, next)
   }
 
   /** Print a table with provided header and rows. */
   def table(header: String*)(rows: Seq[Any]*): Unit = doPrint {
-    breadcrumbHeader + formatter.table(header: _*)(rows: _*)
+    breadcrumbHeader() + formatter.table(header: _*)(rows: _*)
   }
 
   /** Print a stack trace for the current context. */
   def trace(limit: Int = Int.MaxValue): Unit = doPrint {
-    breadcrumbHeader + traceError(new Exception).tail.take(limit).mkString("\n") + "\n" + resetColor
+    breadcrumbHeader() + traceError(new Exception).tail.take(limit).mkString("\n") + "\n" + resetColor
   }
 
   /** Call thread-sleep with a breadcrumb. */
@@ -86,7 +121,7 @@ class Debugger(
   /** Save formatted variables into a file. */
   def formatAndSave(fileName: String)(v: Any*): Unit = save(fileName) {
     val fmt = formatter.copy(settings = formatter.settings.copy(colorize = false))
-    val result = breadcrumbHeader + v.map(value => fmt.value(value) + footer(value)).mkString("\n")
+    val result = breadcrumbHeader() + v.map(value => fmt.value(value) + footer(value)).mkString("\n")
     result
   }
 
@@ -125,8 +160,8 @@ class Debugger(
     case _                                        => ""
   }
 
-  protected def breadcrumbHeader: String =
-    if (settings.showBreadcrumbs) header(underlineColor + breadcrumb().toString + resetColor + headerColor)
+  protected def breadcrumbHeader(idx: Int = 3): String =
+    if (settings.showBreadcrumbs) header(underlineColor + breadcrumb(idx).toString + resetColor + headerColor)
     else ""
 
   protected def breadcrumbSidebar(idx: Int = 3): String =

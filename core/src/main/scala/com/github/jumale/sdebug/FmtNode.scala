@@ -300,9 +300,17 @@ object FmtNode {
     clazz: Class[_],
     value: Vector[(FmtNode[Any], FmtNode[Any])],
     colors: NodeColors,
-    customName: Option[String] = None
+    customName: Option[String] = None,
+    fullNestedClassNames: Boolean = false
   ) extends KeyValNode[Any, Any] {
-    override def name: String = customName.getOrElse(clazz.getSimpleName).replace("$1", "")
+    override def name: String =
+      customName
+        .getOrElse {
+          if (fullNestedClassNames)
+            clazz.getName.replace("$1", "").split('.').last.split('$').mkString(".")
+          else
+            clazz.getSimpleName.replace("$1", "")
+        }
 
     override protected def renderKey(k: FmtNode[Any])(implicit p: RenderParams): String =
       colors.secondary + k.value.toString
