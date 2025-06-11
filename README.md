@@ -17,13 +17,13 @@ not forget to remove prints from my code (because forgotten prints will cause a 
   - an extended version with PlayJson and Scalatest support:
     ```scala
     libraryDependencies ++= Seq(
-      "com.github.jumale" %% "sdebug-impl-ext"  % "0.3.0-SNAPSHOT"
+      "com.github.jumale" %% "sdebug-impl-ext"  % "0.4.0-SNAPSHOT"
     )
     ```
   - or a pure version without any dependencies:
     ```scala
     libraryDependencies ++= Seq(
-      "com.github.jumale" %% "sdebug-impl"  % "0.3.0-SNAPSHOT"
+      "com.github.jumale" %% "sdebug-impl"  % "0.4.0-SNAPSHOT"
     )
     ```
 - reload your SBT console
@@ -32,7 +32,23 @@ not forget to remove prints from my code (because forgotten prints will cause a 
 > `org.scalactic.Prettifier` which can be optionally imported in Scalatest test-classes to make test-failures more readable.
 
 ## Functions
-You can find all these examples in the [DebuggerExamplesTest.scala](./core/src/test/scala/com/github/jumale/sdebug/DebuggerExamplesTest.scala).
+You can also find some examples in the [DebuggerExamplesTest.scala](./core/src/test/scala/com/github/jumale/sdebug/DebuggerExamplesTest.scala).
+
+---
+Importing a scalatest formatter (available only in `sdebug-impl-ext`):
+```scala
+class MyTest extends AnyWordSpec {
+  import sdebug.scalacticPrettifierAnalyse
+  // now failed tests will automatically print errors in the sdebug format
+}
+```
+Or an alternative version which does not print analysis:
+```scala
+class MyTest extends AnyWordSpec {
+  import sdebug.scalacticPrettifier
+}
+```
+The choice between the two versions depends on whether you run tests in Intellij IDEA or in native terminal.
 
 ---
 The debug-printer can be toggled off until the next toggle-on. 
