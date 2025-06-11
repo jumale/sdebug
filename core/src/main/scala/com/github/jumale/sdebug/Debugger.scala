@@ -131,7 +131,8 @@ class Debugger(
   /** Save contents into a file. */
   def save(fileName: String)(contents: String): Unit = {
     import java.io._
-    val target = new BufferedOutputStream(new FileOutputStream(s"${settings.savingDir}/$fileName"))
+    val path = if (fileName.startsWith("/")) fileName else s"${settings.savingDir}/$fileName"
+    val target = new BufferedOutputStream(new FileOutputStream(path))
     try target.write(contents.getBytes)
     finally target.close()
   }

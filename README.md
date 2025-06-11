@@ -31,7 +31,7 @@ not forget to remove prints from my code (because forgotten prints will cause a 
 > Note: the extended version includes an extended printer for JsValue from PlayJson and provides an implementation of 
 > `org.scalactic.Prettifier` which can be optionally imported in Scalatest test-classes to make test-failures more readable.
 
-## Functions
+## Debugging helpers
 You can also find some examples in the [DebuggerExamplesTest.scala](./core/src/test/scala/com/github/jumale/sdebug/DebuggerExamplesTest.scala).
 
 ---
@@ -51,30 +51,18 @@ class MyTest extends AnyWordSpec {
 The choice between the two versions depends on whether you run tests in Intellij IDEA or in native terminal.
 
 ---
-The debug-printer can be toggled off until the next toggle-on. 
-This is useful when you have multiple calls of the same debugged code, but you want to see the output of one specific call:
+Print a simple log message:
 ```scala
-sdebug.off()
-// some code
-sdebug.on()
-```
-
----
-```scala
-// just a simple message log
 sdebug.log(s"lorem ipsum")
 ```
 ![log](./doc/screenshot/log.png)
 
 ---
+Pretty-print variables:
 ```scala
-// pretty-print any variable
-// the printed result is a valid Scala code, so it can be copy-pasted back to IDE if needed
 sdebug.print(swagger)
-
 // also can print multiple values: 
 sdebug.print(foo, bar, baz)
-
 // also can print multiple named values: 
 sdebug.print(
   "foo" -> foo, 
@@ -82,41 +70,43 @@ sdebug.print(
   "baz" -> baz,
 )
 ```
+The printed result is a valid Scala code, so it can be copy-pasted back to IDE if needed:<br>
 ![log](./doc/screenshot/dump.png)
 
 ---
+Exceptions are printed with a stack-trace:
 ```scala
-// exceptions are printed with stack-trace
-// the stack-trace length is limited to 10 by default, but it can be changed via setter 'sdebug.setErrorTraceLimit(20)'
 sdebug.print(exception)
 ```
-![log](./doc/screenshot/dumpException.png)
+![log](./doc/screenshot/dumpException.png)<br>
+The stack-trace length is limited to 10 by default, but it can be changed via setter `sdebug.setErrorTraceLimit(20)`.
 
 ---
+Print diffs between two values:
 ```scala
-// print diffs between two values
-// the diff is calculated recursively, and shows precisely which key or value has been changed/added/deleted
 sdebug.diff(left, right)
 ```
-![log](./doc/screenshot/diff.png)
+![log](./doc/screenshot/diff.png)<br>
+The diff is calculated recursively, and it shows precisely which key or value has been changed/added/deleted.
+The `sdebug-impl-ext` also resolves diffs for any `JsValue` from Play JSON library.
 
 ---
+Print a stack-trace to the current line:
 ```scala
-// just prints a stack-trace to the current line 
 sdebug.trace(limit = 10)
 ```
 ![log](./doc/screenshot/trace.png)
 
 ---
+A wrapper for `Thread.sleep`, which also prints breadcrumbs, so that it can't be accidentally forgotten in code:
 ```scala
-// a wrapper for Thread.sleep, which also prints breadcrumbs, so that it can't be accidentally forgotten in code 
 sdebug.sleep(200)
 ```
 ![log](./doc/screenshot/sleep.png)
 
 ---
+Print results in a table format:
 ```scala
-// printing results in table format 
 sdebug.table(
   Seq("Name", "Value"),
   Seq("string", "foo"),
@@ -128,20 +118,49 @@ sdebug.table(
 ![log](./doc/screenshot/table.png)
 
 ---
+Measure execution time of the provided code-block:
 ```scala
-// measures execution time of the provided code-block 
-// also supports custom name: `sdebug.measure("customName")(myFunction())`
 sdebug.measure(myFunction())
+
+// also supports custom name:
+sdebug.measure("customName")(myFunction())
 ```
 ![log](./doc/screenshot/sleep.png)
 
----
+## Additional helpers
+
+Format a value, but instead of printing save it into a file:
 ```scala
-// format a value, but instead of printing save it to a file
+// 
 sdebug.formatAndSave("filename.txt")(value)
-// also supports multiple values :`sdebug.formatAndSave("filename.txt")(foo, bar, baz)`
-// the default file location is `./target` (i.e. the file from the example will be saved to `./target/filename.txt`)
-// the location can be changed via settings when manually creating a new instance of Debugger
+
+// also supports multiple values:
+sdebug.formatAndSave("filename.txt")(foo, bar, baz)
+```
+The default file location is `./target` (i.e. the file from the example will be saved to `./target/filename.txt`),
+and it's only applicable to relative paths/file-names, while  absolute paths will be handled as is.
+The default folder also can be changed when creating a new instance of Debugger (not supported in `sdebug-impl-ext`).
+
+---
+Simply read/write file contents:
+```scala
+sdebug.save("filename.txt")("contents")
+val contents = sdebug.read("filename.txt")
+```
+
+---
+Read JSON files (only in `sdebug-impl-ext`):
+```scala
+val data = sdebug.readJson[MyData]("filename.json")
+```
+
+---
+The debug-printer can be toggled off until the next toggle-on.
+This is useful when you have multiple calls of the same debugged code, but you want to see the output of one specific call:
+```scala
+sdebug.off()
+// some code
+sdebug.on()
 ```
 
 ---
@@ -149,6 +168,8 @@ Enable timestamps in prints
 ```scala
 sdebug.setShowTime(true)
 ```
+
+## Configuration in runtime
 
 ---
 Disable colors
