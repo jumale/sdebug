@@ -5,6 +5,7 @@ import com.github.jumale.sdebug.FmtNode._
 import scala.collection.{immutable, mutable}
 import scala.concurrent.Future
 import scala.util.Try
+import scala.util.matching.Regex
 
 final case class Formatter(
   settings: Formatter.Settings = Formatter.Settings.default(),
@@ -60,11 +61,11 @@ final case class Formatter(
           case o: Option[_]           => OptionNode(o.map(toNode), settings.coproductColor)
           case e: Either[_, _]        => EitherNode(e.map(toNode).left.map(toNode), settings.coproductColor)
           case e: Try[_]              => TryNode(e.map(toNode), settings.coproductColor, settings.errorColor)
-          case s: immutable.Seq[_]    => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
-          case s: immutable.Set[_]    => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
+          case s: immutable.Seq[_]    => CollectionNode(s.getClass, s.map(toNode), settings.arrColor, settings.classNames, None)
+          case s: immutable.Set[_]    => CollectionNode(s.getClass, s.map(toNode), settings.arrColor, settings.classNames, None)
           case m: immutable.Map[_, _] => MapNode(m.getClass, m.toVector.map(a => toNode(a._1) -> toNode(a._2)), settings.mapColor)
-          case s: mutable.Seq[_]      => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
-          case s: mutable.Set[_]      => CollectionNode(s.getClass, s.map(toNode), settings.arrColor)
+          case s: mutable.Seq[_]      => CollectionNode(s.getClass, s.map(toNode), settings.arrColor, settings.classNames, None)
+          case s: mutable.Set[_]      => CollectionNode(s.getClass, s.map(toNode), settings.arrColor, settings.classNames, None)
           case m: mutable.Map[_, _]   => MapNode(m.getClass, m.toVector.map(a => toNode(a._1) -> toNode(a._2)), settings.mapColor)
           case f: Future[_]           => FutureNode(f, toNode, settings.futureColor, settings.errorColor)
           // scalafmt: { maxColumn = 120 }
@@ -79,14 +80,15 @@ final case class Formatter(
 
             // if fields look like tuple
             else if (fields.nonEmpty && fields.forall(_.matches("^_\\d(\\$.*)?$")))
-              CollectionNode(p.getClass, values.map(toNode), settings.coproductColor)
+              CollectionNode(p.getClass, values.map(toNode), settings.coproductColor, settings.classNames, None)
+
             // otherwise it's an object
             else
               ObjectNode( //
                 clazz = p.getClass,
                 value = fields.zip(values).map { case (k, v) => toNode(k) -> toNode(v) },
                 colors = settings.objColor,
-                fullNestedClassNames = settings.fullNestedClassNames
+                classNames = settings.classNames
               )
 
           case e: Throwable => ErrorNode(e, settings.errorColor)
@@ -143,7 +145,7 @@ object Formatter {
     multiline: Boolean,
     showKeys: Boolean,
     colorize: Boolean,
-    fullNestedClassNames: Boolean,
+    classNames: ClassNameSettings,
     palette: Palette,
     defaultColor: NodeColors,
     strColor: NodeColors,
@@ -167,7 +169,7 @@ object Formatter {
       multiline: Boolean = true,
       showNames: Boolean = true,
       colorize: Boolean = true,
-      fullNestedClassNames: Boolean = false,
+      classNames: ClassNameSettings = ClassNameSettings(full = false, replace = Seq.empty),
       palette: Palette = Palette.console
     ): Settings = Settings(
       indentSize = indentSize,
@@ -176,7 +178,7 @@ object Formatter {
       showKeys = showNames,
       colorize = colorize,
       palette = palette,
-      fullNestedClassNames = fullNestedClassNames,
+      classNames = classNames,
       defaultColor = NodeColors(palette.reset, palette.reset, palette.reset),
       strColor = NodeColors(palette.green, palette.black, palette.reset),
       numColor = NodeColors(palette.cyan, palette.reset, palette.reset),
@@ -192,4 +194,6 @@ object Formatter {
       tableColor = NodeColors(palette.black, palette.yellow, palette.reset)
     )
   }
+
+  case class ClassNameSettings(full: Boolean, replace: Seq[(Regex, String)])
 }

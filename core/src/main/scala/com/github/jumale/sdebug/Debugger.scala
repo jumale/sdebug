@@ -2,6 +2,7 @@ package com.github.jumale.sdebug
 
 import java.time.LocalTime
 import scala.collection.immutable.ListMap
+import scala.util.matching.Regex
 
 //noinspection ScalaWeakerAccess,ScalaUnusedSymbol
 class Debugger(
@@ -34,8 +35,10 @@ class Debugger(
   def setErrorTraceLimit(size: Int): Unit =
     settings = settings.copy(errorTraceLimit = size)
 
-  def showFullNestedClassNames(): Unit =
-    formatter = formatter.copy(settings = formatter.settings.copy(fullNestedClassNames = true))
+  def configureClassNames(showFull: Boolean = false, replace: Seq[(Regex, String)] = Seq.empty): Unit =
+    formatter = formatter.copy(settings =
+      formatter.settings.copy(classNames = Formatter.ClassNameSettings(full = showFull, replace = replace))
+    )
 
   def aliases(pairs: (Any, Any)*): Unit =
     pairs.foreach { case (from, to) => formatter.addAlias(from, to) }
@@ -131,6 +134,13 @@ class Debugger(
     val target = new BufferedOutputStream(new FileOutputStream(s"${settings.savingDir}/$fileName"))
     try target.write(contents.getBytes)
     finally target.close()
+  }
+
+  def read(fileName: String): String = {
+    val path = if (fileName.startsWith("/")) fileName else s"${settings.savingDir}/$fileName"
+    val src = scala.io.Source.fromFile(path)
+    try src.getLines.mkString("\n")
+    finally src.close()
   }
 
   protected def getColor(targetColor: Palette => String): String =

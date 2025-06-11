@@ -1,9 +1,9 @@
 lazy val scala212 = "2.12.19"
-lazy val scala213 = "2.13.14"
+lazy val scala213 = "2.13.16"
 lazy val supportedScalaVersions = List(scala212, scala213)
 
 ThisBuild / scalaVersion := scala213
-ThisBuild / version := "0.3.0-SNAPSHOT"
+ThisBuild / version := "0.4.0-SNAPSHOT"
 ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / organization := "com.github.jumale"
 ThisBuild / homepage := Some(url("https://github.com/jumale/sdebug"))

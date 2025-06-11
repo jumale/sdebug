@@ -1,4 +1,5 @@
 /.bsp/
 target/
+.idea/
 !src/main/scala/ytil
 !src/test/scala/ytil

@@ -14,15 +14,17 @@ object FmtNode {
     (expected, actual) match {
       case (x, y) if x.value == y.value => x
 
+      case (x: OptionNode[_], y: OptionNode[_]) =>
+        (x.value, y.value) match {
+          case (Some(xv), Some(yv)) => x.copy(value = x.value.map(_ => diff(xv, yv, colors)))
+          case (_, _)               => DiffNode(Some(expected), Some(actual), colors)
+        }
+
       case (x: CollectionNode[_], y: CollectionNode[_]) =>
-        if (x.name != y.name)
-          DiffNode(Some(x), Some(y), colors)
-        else {
-          val (source: Vector[FmtNode[Any]], target: Vector[FmtNode[Any]], direction: Boolean) =
-            if (x.value.size >= y.value.size)
-              (x.value.toVector, y.value.toVector, true)
-            else
-              (y.value.toVector, x.value.toVector, false)
+        def handleSeq(xv: Iterable[FmtNode[Any]], yv: Iterable[FmtNode[Any]]) = {
+          val (source, target, direction) =
+            if (xv.size >= yv.size) (xv.toVector, yv.toVector, true)
+            else (yv.toVector, xv.toVector, false)
 
           x.copy(value = source.zipWithIndex.map { case (s, i) =>
             (target.lift(i), direction) match {
@@ -31,6 +33,26 @@ object FmtNode {
               case (None, false) => DiffNode(None, Some(s), colors)
             }
           })
+        }
+
+        def handleSet(xv: Iterable[FmtNode[Any]], yv: Iterable[FmtNode[Any]]) = {
+          val xvs = xv.toSet
+          val yvs = yv.toSet
+          val left = xvs.diff(yvs)
+          val right = yvs.diff(xvs)
+          x.copy(value =
+            xvs.diff(left).diff(right) ++
+              right.map(v => DiffNode(Some(v), None, colors)) ++
+              left.map(v => DiffNode(None, Some(v), colors))
+          )
+        }
+
+        (x.value, y.value) match {
+          case (xv: scala.collection.immutable.Seq[_], yv: scala.collection.immutable.Seq[_]) => handleSeq(xv, yv)
+          case (xv: scala.collection.mutable.Seq[_], yv: scala.collection.mutable.Seq[_])     => handleSeq(xv, yv)
+          case (xv: scala.collection.immutable.Set[_], yv: scala.collection.immutable.Set[_]) => handleSet(xv, yv)
+          case (xv: scala.collection.immutable.Set[_], yv: scala.collection.immutable.Set[_]) => handleSet(xv, yv)
+          case _                                                                              => x
         }
 
       case (x: MapNode[_, _], y: MapNode[_, _]) =>
@@ -161,6 +183,7 @@ object FmtNode {
     clazz: Class[_],
     value: Iterable[FmtNode[T]],
     colors: NodeColors,
+    classNames: Formatter.ClassNameSettings = Formatter.ClassNameSettings(full = false, replace = Seq.empty),
     customName: Option[String] = None
   ) extends FmtNode[Iterable[FmtNode[T]]] {
     def render(implicit p: RenderParams): String =
@@ -179,8 +202,9 @@ object FmtNode {
         case n if n.matches(collectionPkg + "Nil.*")               => "List"
         case n if n.matches(collectionPkg + "Vector.*")            => "Vector"
         case n if n.matches(collectionPkg + "Set\\$(Empty)?Set.*") => "Set"
+        case n if n.matches(collectionPkg + "ArraySeq.*")          => "ArraySeq"
         case n if n.matches("scala\\.Tuple.*")                     => ""
-        case _                                                     => clazz.getSimpleName
+        case _                                                     => fmtClassName(clazz, classNames)
       }
     }
 
@@ -300,17 +324,10 @@ object FmtNode {
     clazz: Class[_],
     value: Vector[(FmtNode[Any], FmtNode[Any])],
     colors: NodeColors,
-    customName: Option[String] = None,
-    fullNestedClassNames: Boolean = false
+    classNames: Formatter.ClassNameSettings,
+    customName: Option[String] = None
   ) extends KeyValNode[Any, Any] {
-    override def name: String =
-      customName
-        .getOrElse {
-          if (fullNestedClassNames)
-            clazz.getName.replace("$1", "").split('.').last.split('$').mkString(".")
-          else
-            clazz.getSimpleName.replace("$1", "")
-        }
+    override def name: String = customName.getOrElse(fmtClassName(clazz, classNames))
 
     override protected def renderKey(k: FmtNode[Any])(implicit p: RenderParams): String =
       colors.secondary + k.value.toString
@@ -353,5 +370,17 @@ object FmtNode {
     private def name: String = value.getClass.getSimpleName.stripSuffix("$1")
     private def open(implicit p: RenderParams): String = colors.primary + name + "("
     private def close(implicit p: RenderParams): String = colors.primary + ")"
+  }
+
+  private def fmtClassName(clazz: Class[_], settings: Formatter.ClassNameSettings): String = {
+    val baseName =
+      if (settings.full)
+        clazz.getName.replace("$1", "").split('.').last.split('$').mkString(".")
+      else
+        clazz.getSimpleName.replace("$1", "")
+
+    settings.replace.foldLeft(baseName) { case (acc, (regex, replacement)) =>
+      regex.replaceAllIn(acc, replacement)
+    }
   }
 }

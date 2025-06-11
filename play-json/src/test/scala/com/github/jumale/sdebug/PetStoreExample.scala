@@ -64,7 +64,7 @@ class PetStoreExample extends AnyWordSpec {
                       .deepMerge(
                         Json.obj( //
                           "properties" -> (r.schema \ "properties").as[JsArray].value.map { p =>
-                            (p.as[JsObject] - "message")
+                            p.as[JsObject] - "message"
                           }
                         )
                       )
@@ -78,6 +78,13 @@ class PetStoreExample extends AnyWordSpec {
     )
 
     debug.diff(expected, actual)
+  }
+
+  "diff arrays" in {
+    debug.diff( //
+      Json.obj("baz" -> Json.arr("bar", "foo")),
+      Json.obj("baz" -> Json.arr("foo", "bar"))
+    )
   }
 }
 

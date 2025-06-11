@@ -2,7 +2,7 @@ package com.github.jumale.sdebug
 
 import org.scalatest.wordspec.AnyWordSpec
 
-import scala.collection.immutable.HashMap
+import scala.collection.immutable.{ArraySeq, HashMap}
 import scala.collection.{SortedMap, mutable}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -170,7 +170,7 @@ class DebuggerExamplesTest extends AnyWordSpec {
         )
       ),
       Foo(
-        List(
+        Seq(
           Bar(
             Map( //
               KeyBar(42) -> Baz(ParamFoo("b")),
@@ -180,6 +180,23 @@ class DebuggerExamplesTest extends AnyWordSpec {
           )
         )
       )
+    )
+
+    debug.diff( //
+      List(Bar(Map(KeyFoo("a") -> Baz(ParamFoo("b"))))),
+      new ArraySeq.ofRef(List(Bar(Map(KeyFoo("a") -> Baz(ParamFoo("c"))))).toArray)
+    )
+    debug.diff( //
+      Some(List(Bar(Map(KeyFoo("a") -> Baz(ParamFoo("b")))))),
+      Some(new ArraySeq.ofRef(List(Bar(Map(KeyFoo("a") -> Baz(ParamFoo("b"))))).toArray))
+    )
+    debug.diff( //
+      List(Bar(Map(KeyFoo("a") -> Baz(ParamFoo("b"))))),
+      Vector(Bar(Map(KeyFoo("a") -> Baz(ParamFoo("c")))))
+    )
+    debug.diff( //
+      Set(Baz(ParamFoo("foo")), Foo(Seq.empty), Baz(ParamFoo("bar"))),
+      Set(Baz(ParamFoo("foo")), Baz(ParamFoo("bar")), Bar(Map.empty))
     )
   }
 

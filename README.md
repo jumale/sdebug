@@ -11,7 +11,7 @@ not forget to remove prints from my code (because forgotten prints will cause a 
 ## Installation
 
 - clone this project locally
-- go to the root folder and run `sbt +publishLocal`
+- go to the root folder and run `sbt +publishLocal` or `make build`
 - create if not exists `~/.sbt/1.0/global.sbt` (or `~/.sbt/0.13/global.sbt` for older SBT)
 - install one of the versions:
   - an extended version with PlayJson and Scalatest support:
@@ -45,7 +45,7 @@ sdebug.on()
 
 ---
 ```scala
-// just a simple log-message
+// just a simple message log
 sdebug.log(s"lorem ipsum")
 ```
 ![log](./doc/screenshot/log.png)
@@ -55,7 +55,16 @@ sdebug.log(s"lorem ipsum")
 // pretty-print any variable
 // the printed result is a valid Scala code, so it can be copy-pasted back to IDE if needed
 sdebug.print(swagger)
-// also can print multiple values: sdebug.print(foo, bar, baz)
+
+// also can print multiple values: 
+sdebug.print(foo, bar, baz)
+
+// also can print multiple named values: 
+sdebug.print(
+  "foo" -> foo, 
+  "bar" -> bar, 
+  "baz" -> baz,
+)
 ```
 ![log](./doc/screenshot/dump.png)
 
@@ -117,4 +126,37 @@ sdebug.formatAndSave("filename.txt")(value)
 // also supports multiple values :`sdebug.formatAndSave("filename.txt")(foo, bar, baz)`
 // the default file location is `./target` (i.e. the file from the example will be saved to `./target/filename.txt`)
 // the location can be changed via settings when manually creating a new instance of Debugger
+```
+
+---
+Enable timestamps in prints
+```scala
+sdebug.setShowTime(true)
+```
+
+---
+Disable colors
+```scala
+sdebug.setColorize(false)
+```
+
+---
+Configure how class names are printed:
+```scala
+sdebug.configureClassNames(
+  showFull = true, // true results in 'class.getName', false results in 'class.getSimpleName'
+  replace = Seq(
+    // regex-match and replace substings in printed class names
+    "^\\w+".r -> "customPrefix"
+  )
+)
+```
+
+---
+Fully replace printed types with aliases
+```scala
+sdebug.aliases(
+  "ClassA" -> "ClassB",
+  "ClassC" -> "ClassD",
+)
 ```
