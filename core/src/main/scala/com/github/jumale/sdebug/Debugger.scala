@@ -200,6 +200,13 @@ class Debugger(
         val file = se.getFileName + ":" + se.getLineNumber
         s"$clazz::$method($file)"
       }
+
+  implicit class DebuggedValueOps[T](value: T) {
+    def sdebug: T = {
+      formatAndPrint()(value)
+      value
+    }
+  }
 }
 
 object Debugger {
