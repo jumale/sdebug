@@ -1,17 +1,17 @@
 # Scala Debugging Utils
 
-This library provides basic tools for debugging Scala code in console: pretty-printing variables, diffs, and some more.<br>
-It is my personal util-library which I use for debugging in my daily work (mostly in tests). It's all started with 
-a single function `prettyFormat` ([inspired by this gist](https://gist.github.com/carymrobbins/7b8ed52cd6ea186dbdf8)) 
-and eventually grew into my personal tool-kit.
+This library provides tools for debugging Scala code in console: pretty-printing variables, diffs, and some more.<br>
+It's my personal toolkit which I use for debugging in my daily work (mostly while writing tests), created as an alternative to breakpoint-debugging in IDE 
+which sometimes does not meet my needs. 
+It's all started with a single pretty-print function ([inspired by this gist](https://gist.github.com/carymrobbins/7b8ed52cd6ea186dbdf8)) and eventually expanded into a set of functions.
 
-I prefer installing this library via `global.sbt` - this allows me to use it in any project, and also ensures that I do
-not forget to remove prints from my code (because forgotten prints will cause a compilation error in CI which does not know about this library).
+This library is not published yet anywhere, I build it locally from this repository and then enable it via global SBT configs so that I can use it in any project.
+It also provides a nice side effect - I can't forget removing my debugging code, otherwise CI would not be able to compile the project, since there is no such library. 
 
 ## Installation
 
 - clone this project locally
-- go to the root folder and run `sbt +publishLocal` or `make build`
+- go to the root folder and run `sbt +publishLocal` (or `make build`)
 - create if not exists `~/.sbt/1.0/global.sbt` (or `~/.sbt/0.13/global.sbt` for older SBT)
 - install one of the versions:
   - an extended version with PlayJson and Scalatest support:
@@ -20,35 +20,19 @@ not forget to remove prints from my code (because forgotten prints will cause a 
       "com.github.jumale" %% "sdebug-impl-ext"  % "0.4.0-SNAPSHOT"
     )
     ```
-  - or a pure version without any dependencies:
+  - or a base version without any dependencies:
     ```scala
     libraryDependencies ++= Seq(
       "com.github.jumale" %% "sdebug-impl"  % "0.4.0-SNAPSHOT"
     )
     ```
-- reload your SBT console
+- restart your SBT console
 
 > Note: the extended version includes an extended printer for JsValue from PlayJson and provides an implementation of 
 > `org.scalactic.Prettifier` which can be optionally imported in Scalatest test-classes to make test-failures more readable.
 
 ## Debugging helpers
 You can also find some examples in the [DebuggerExamplesTest.scala](./core/src/test/scala/com/github/jumale/sdebug/DebuggerExamplesTest.scala).
-
----
-Importing a scalatest formatter (available only in `sdebug-impl-ext`):
-```scala
-class MyTest extends AnyWordSpec {
-  import sdebug.scalacticPrettifierAnalyse
-  // now failed tests will automatically print errors in the sdebug format
-}
-```
-Or an alternative version which does not print analysis:
-```scala
-class MyTest extends AnyWordSpec {
-  import sdebug.scalacticPrettifier
-}
-```
-The choice between the two versions depends on whether you run tests in Intellij IDEA or in native terminal.
 
 ---
 Print a simple log message:
@@ -126,6 +110,37 @@ sdebug.measure(myFunction())
 sdebug.measure("customName")(myFunction())
 ```
 ![log](./doc/screenshot/sleep.png)
+
+---
+Intercept and print values:
+```scala
+// Import this extension into the context
+import sdebug.DebuggedValueOps
+// Now we can intercept and print any values
+
+val foo = "bar".sdebug // prints "bar" and returns it back
+
+def doSomething() = 
+  doThis()
+    .sdebug // prints result of doThis() and returns it back
+    .doThat()
+
+```
+
+---
+Importing a scalatest formatter (available only in `sdebug-impl-ext`):
+```scala
+class MyTest extends AnyWordSpec {
+  import sdebug.scalacticPrettifierAnalyse
+  // now failed tests will automatically print errors in the sdebug format
+}
+```
+Or an alternative version which does not print analysis:
+```scala
+class MyTest extends AnyWordSpec {
+  import sdebug.scalacticPrettifier
+}
+```
 
 ## Additional helpers
 
