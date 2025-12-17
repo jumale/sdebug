@@ -2,6 +2,7 @@ package com.github.jumale.sdebug
 
 import java.time.LocalTime
 import scala.collection.immutable.ListMap
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
 
 //noinspection ScalaWeakerAccess,ScalaUnusedSymbol
@@ -59,10 +60,10 @@ class Debugger(
   def printIf(condition: Boolean)(a: Any, b: Any, tail: Any*): Unit =
     formatAndPrint(condition)(Seq(a, b) ++ tail)
 
-  private def formatAndPrint(condition: Boolean = true)(values: Any*): Unit =
+  protected def formatAndPrint(condition: Boolean = true, header: String = breadcrumbHeader(idx = 4))(values: Any*): Unit =
     if (condition)
       doPrint(
-        breadcrumbHeader(idx = 4) +
+        header +
           asKeyValPairs(values)
             .map(m => formatter.value(m).replaceFirst("Node", "") + footer(m))
             .getOrElse(values.map(value => formatter.value(value) + footer(value)).mkString("\n"))
@@ -201,10 +202,46 @@ class Debugger(
         s"$clazz::$method($file)"
       }
 
-  implicit class DebuggedValueOps[T](value: T) {
-    def sdebug: T = {
-      formatAndPrint()(value)
-      value
+  trait DebuggerImplicits {
+
+    implicit class SdebugAnyValueOps[T](value: T) {
+      def sdebug: T = {
+        formatAndPrint()(value)
+        value
+      }
+
+      def sdebug(name: String): T = {
+        formatAndPrint()(name -> value)
+        value
+      }
+    }
+
+    implicit class SdebugFutureValueOps[T](value: Future[T]) {
+      def sdebugFuture(implicit ec: ExecutionContext): Future[T] = {
+        val header = breadcrumbHeader()
+        value
+          .map[T] { v =>
+            formatAndPrint(header = header)(v)
+            v
+          }
+          .recoverWith[T] { case err: Throwable =>
+            formatAndPrint(header = header)(err)
+            Future.failed(err)
+          }
+      }
+
+      def sdebugFutureMap(fn: T => Any)(implicit ec: ExecutionContext): Future[T] = {
+        val header = breadcrumbHeader()
+        value
+          .map[T] { v =>
+            formatAndPrint(header = header)(fn(v))
+            v
+          }
+          .recoverWith[T] { case err: Throwable =>
+            formatAndPrint(header = header)(err)
+            Future.failed(err)
+          }
+      }
     }
   }
 }

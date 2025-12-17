@@ -11,7 +11,7 @@ import scala.util.{Failure, Success, Try}
 class DebuggerExamplesTest extends AnyWordSpec {
   val debug: Debugger = new Debugger()
 
-  final case class Root(
+  case class Root(
     string: String = "hello world!",
     trueBool: Boolean = true,
     falseBool: Boolean = false,
@@ -53,7 +53,7 @@ class DebuggerExamplesTest extends AnyWordSpec {
     error: Throwable = new NullPointerException("exception message")
   )
 
-  final case class Numbers(
+  case class Numbers(
     int: Int = 42,
     long: Long = 420,
     bigInt: BigInt = BigInt(4200),
@@ -61,7 +61,7 @@ class DebuggerExamplesTest extends AnyWordSpec {
     float: Float = 42.02f
   )
 
-  final case class Coproducts(
+  case class Coproducts(
     some: Option[Int] = Some(42),
     none: Option[Int] = None,
     left: Either[String, Int] = Left("foo"),
@@ -79,7 +79,7 @@ class DebuggerExamplesTest extends AnyWordSpec {
     dataType: Seq[DataType] = Seq(DataType.NoFields, DataType.WithFields("foo", 42))
   )
 
-  final case class Collections(
+  case class Collections(
     seq: Seq[Int],
     list: List[Int],
     vector: Vector[Int],
@@ -105,7 +105,7 @@ class DebuggerExamplesTest extends AnyWordSpec {
   sealed trait DataType
   object DataType {
     case object NoFields extends DataType
-    final case class WithFields(foo: String, bar: Int) extends DataType
+    case class WithFields(foo: String, bar: Int) extends DataType
   }
 
   val example: Root = Root()
@@ -215,7 +215,7 @@ class DebuggerExamplesTest extends AnyWordSpec {
     debug.sleep("foo", 200)
   }
 
-  final case class CellVal(a: String, b: Int)
+  case class CellVal(a: String, b: Int)
   "table" in {
     debug.table("", "H1", "H2", "H3 the longest by header")(
       Seq(
@@ -250,5 +250,14 @@ class DebuggerExamplesTest extends AnyWordSpec {
     debug.measure("myCode") {
       Thread.sleep(100)
     }
+  }
+
+  "SQL" in {
+    debug.print("""SELECT u.id as userId, u.name, o.id as orderId, o.total
+        |FROM users u
+        |JOIN orders o ON u.id = o.user_id
+        |WHERE o.status = 'completed'
+        |ORDER BY o.created_at DESC
+        |LIMIT 10 OFFSET 20""".stripMargin)
   }
 }

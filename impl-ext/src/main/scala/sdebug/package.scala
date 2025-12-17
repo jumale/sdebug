@@ -1,27 +1,10 @@
-import com.github.jumale.sdebug.playjson.JsonFormatter
-import com.github.jumale.sdebug.{Debugger, Formatter, NodeColors, Palette}
-import com.github.jumale.sdebug.scalactic.SdebugScalacticPrettifier
-import org.scalactic.{Prettifier, PrettyPair}
-import play.api.libs.json.{JsValue, Json, Reads}
+import com.github.jumale.sdebug.playjson.{JsonFormatter, SdebugJsonSupport}
+import com.github.jumale.sdebug.scalactic.SdebugScalacticSupport
+import com.github.jumale.sdebug.slick.SdebugSlickSupport
+import com.github.jumale.sdebug.{Debugger, Formatter}
 
-package object sdebug extends Debugger(formatter = Formatter(extend = JsonFormatter)) {
-  // Reset-color may look red in scalatest outputs, so we better replace it with explicit white
-  private def prettifierFormatter = formatter.copy(settings =
-    formatter.settings.copy(defaultColor =
-      NodeColors(
-        primaryColor = Palette.console.white,
-        secondaryColor = Palette.console.white,
-        resetColor = Palette.console.reset
-      )
-    )
-  )
+import scala.language.implicitConversions
 
-  implicit def scalacticPrettifier: Prettifier =
-    new SdebugScalacticPrettifier(prettifierFormatter)
-
-  implicit def scalacticPrettifierAnalyse: Prettifier =
-    new SdebugScalacticPrettifier(prettifierFormatter, printAnalysis = true)
-
-  def readJson[T: Reads](fileName: String): T =
-    Json.parse(read(fileName)).as[T]
+package object sdebug extends Debugger(formatter = Formatter(extend = JsonFormatter)) with SdebugJsonSupport with SdebugSlickSupport with SdebugScalacticSupport {
+  object implicits  extends DebuggerImplicits with SdebugSlickImplicits with SdebugScalacticImplicits
 }

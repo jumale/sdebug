@@ -51,6 +51,7 @@ final case class Formatter(
 
           // scalafmt: { maxColumn = 170 }
           case v if v == null         => NullNode(settings.nullColor)
+          case s: String if isSql(s)  => SqlNode(s, colors = settings.sqlColor)
           case s: String              => StringNode(s, settings.strColor)
           case n: Int                 => NumberNode(n, settings.numColor)
           case n: Long                => NumberNode(n, settings.numColor)
@@ -69,6 +70,12 @@ final case class Formatter(
           case m: mutable.Map[_, _]   => MapNode(m.getClass, m.toVector.map(a => toNode(a._1) -> toNode(a._2)), settings.mapColor)
           case f: Future[_]           => FutureNode(f, toNode, settings.futureColor, settings.errorColor)
           // scalafmt: { maxColumn = 120 }
+
+          case (s: String, header: Seq[?], rows: Seq[?]) if isSql(s) =>
+            SqlNode(s, colors = settings.sqlColor, resultHeader = header.asInstanceOf[Seq[String]], resultRows = rows.asInstanceOf[Seq[Seq[Any]]].map(_.map(toNode)))
+
+          case (s: String, rows: Seq[?]) if isSql(s)  =>
+            SqlNode(s, colors = settings.sqlColor, resultHeader = Seq.empty, resultRows = rows.asInstanceOf[Seq[Seq[Any]]].map(_.map(toNode)))
 
           case p: Product =>
             val fields = Util.getProductFields(p)
@@ -95,6 +102,13 @@ final case class Formatter(
           case v            => RawNode(v, settings.defaultColor)
         }
     }
+
+  private def isSql(s: String): Boolean = {
+    val v = s.toLowerCase()
+    ((v.contains("select") || v.contains("delete")) && v.contains("from")) ||
+    (v.contains("insert") && v.contains("into")) ||
+    (v.contains("update") && v.contains("set"))
+  }
 
 }
 
@@ -159,7 +173,8 @@ object Formatter {
     objColor: NodeColors,
     errorColor: NodeColors,
     diffColors: NodeColors,
-    tableColor: NodeColors
+    tableColor: NodeColors,
+    sqlColor: NodeColors
   )
 
   object Settings {
@@ -191,7 +206,8 @@ object Formatter {
       objColor = NodeColors(palette.yellow, palette.blue, palette.reset),
       errorColor = NodeColors(palette.yellow, palette.red, palette.reset),
       diffColors = NodeColors(palette.greenBg + palette.white, palette.redBg + palette.white, palette.reset),
-      tableColor = NodeColors(palette.black, palette.yellow, palette.reset)
+      tableColor = NodeColors(palette.black, palette.yellow, palette.reset),
+      sqlColor = NodeColors(palette.yellow, palette.cyan, palette.reset)
     )
   }
 

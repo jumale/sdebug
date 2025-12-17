@@ -51,7 +51,7 @@ object FmtNode {
           case (xv: scala.collection.immutable.Seq[_], yv: scala.collection.immutable.Seq[_]) => handleSeq(xv, yv)
           case (xv: scala.collection.mutable.Seq[_], yv: scala.collection.mutable.Seq[_])     => handleSeq(xv, yv)
           case (xv: scala.collection.immutable.Set[_], yv: scala.collection.immutable.Set[_]) => handleSet(xv, yv)
-          case (xv: scala.collection.immutable.Set[_], yv: scala.collection.immutable.Set[_]) => handleSet(xv, yv)
+          case (xv: scala.collection.mutable.Set[_], yv: scala.collection.mutable.Set[_])     => handleSet(xv, yv)
           case _                                                                              => x
         }
 
@@ -370,6 +370,212 @@ object FmtNode {
     private def name: String = value.getClass.getSimpleName.stripSuffix("$1")
     private def open(implicit p: RenderParams): String = colors.primary + name + "("
     private def close(implicit p: RenderParams): String = colors.primary + ")"
+  }
+
+  /** A node representing an SQL query and its results.
+   * Renders the SQL query with syntax highlighting and line formatting.
+   *
+   * @param query The SQL query string.
+   * @param resultRows The results of the SQL query as a sequence of rows, where each row is a sequence of formatted nodes.
+   * @param colors The color scheme to use for rendering.
+   */
+  final case class SqlNode(query: String, colors: NodeColors, resultHeader: Seq[String] = Seq.empty, resultRows: Seq[Seq[FmtNode[Any]]] = Seq.empty) extends FmtNode[String] {
+    override def value: String = query
+
+    override def render(implicit p: RenderParams): String = {
+      val keywords = Set("SELECT", "FROM", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "ON", "WHERE", "GROUP", "BY", "ORDER", "HAVING", "LIMIT", "OFFSET", "AS", "AND", "OR", "NOT", "IN", "EXISTS", "BETWEEN", "LIKE", "IS", "NULL", "DISTINCT", "ALL", "UNION", "INTERSECT", "EXCEPT")
+
+      val newLineKeywords = Set("SELECT", "FROM", "JOIN", "LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "OUTER JOIN", "ON", "WHERE", "GROUP BY", "ORDER BY", "HAVING", "LIMIT", "OFFSET", "UNION", "INTERSECT", "EXCEPT")
+
+      val tokens = tokenize(query)
+      val formattedQuery = formatTokens(tokens, keywords, newLineKeywords, p)
+      val formattedResults = if (resultRows.isEmpty) "" else "\n\n" + Table(header = resultHeader, rows = resultRows, colors = colors).render
+
+      formattedQuery + formattedResults
+    }
+
+    private def tokenize(sql: String): Seq[String] = {
+      val pattern = """([a-zA-Z_][a-zA-Z0-9_]*)|([0-9]+(?:\.[0-9]+)?)|('(?:[^']|'')*')|("(?:[^"]|"")*")|([(),;=<>!+\-*/.])|(\s+)""".r
+      pattern.findAllIn(sql).toSeq
+    }
+
+    private def formatTokens(tokens: Seq[String], keywords: Set[String], newLineKeywords: Set[String], p: RenderParams): String = {
+      // Uncomment to enable precise debugging of token formatting
+      def debug(s: String): Unit = () // print(s)
+
+      val result = new StringBuilder
+      def append(s: String): Unit = {
+        val lineNumber = Thread.currentThread().getStackTrace()(2).getLineNumber
+        val dump = s match {
+          case colors.primaryColor => "<PC>"
+          case colors.secondaryColor => "<SC>"
+          case colors.resetColor => "<RC>"
+          case "\n" => "\\n"
+          case " " => "&nbsp;"
+          case _ => s
+        }
+        debug(s"${Palette.console.green}$dump${Palette.console.reset}($lineNumber)")
+        result.append(s)
+      }
+
+      def isKeyword(v: String) = keywords.contains(v.toUpperCase)
+      def isNewLineKeyword(v: String) = newLineKeywords.contains(v.toUpperCase)
+      def isInlineKeyword(v: String) = isKeyword(v) && !isNewLineKeyword(v)
+
+      var i = 0
+      var indent = 0
+      var needsNewLine = false
+      var afterSelect = false
+      var columnCount = 0
+      var prevToken = ""
+
+      while (i < tokens.length) {
+        val token = tokens(i)
+        val isTokenEmpty = token.trim.isEmpty
+        val upperToken = token.toUpperCase
+
+        debug(s">>> $token[$prevToken]: ")
+
+        if (isTokenEmpty) {
+          i += 1
+        } else if (isKeyword(token)) {
+          // Check for multi-word keywords
+          val twoWord = if (i + 2 < tokens.length) s"$upperToken ${tokens(i + 2).toUpperCase}" else ""
+          debug(s"($twoWord), ")
+
+          if (isNewLineKeyword(twoWord)) {
+            if (result.nonEmpty) {
+              append("\n")
+              append(p.indent)
+            }
+            if (afterSelect) {
+              debug("!$AS, ")
+              afterSelect = false
+            }
+
+            append(colors.primaryColor)
+            append(upperToken)
+            i += 1
+            if (i < tokens.length && tokens(i).trim.isEmpty) {
+              i += 1
+            }
+            if (i < tokens.length) {
+              append(" ")
+              append(tokens(i).toUpperCase)
+              append(colors.resetColor)
+              i += 1
+            }
+            if (twoWord == "GROUP BY" || twoWord == "ORDER BY") {
+              indent = 0
+            } else {
+              indent = 1
+            }
+
+            debug("!$NNL, ")
+            needsNewLine = false
+            afterSelect = twoWord == "SELECT"
+            columnCount = 0
+
+          } else if (isNewLineKeyword(upperToken)) {
+            if (result.nonEmpty && upperToken != "SELECT") {
+              append("\n")
+              append(p.indent)
+            }
+            append(colors.primaryColor)
+            append(upperToken)
+            append(colors.resetColor)
+
+            if (upperToken == "SELECT") {
+              debug("$AS, ")
+              afterSelect = true
+              indent = 1
+              columnCount = 0
+
+            } else if (upperToken == "FROM" || upperToken.endsWith("JOIN") || upperToken == "WHERE" || upperToken == "ON") {
+              debug("!$AS, ")
+              afterSelect = false
+              indent = 1
+
+            } else {
+              indent = 0
+            }
+            debug("!$NNL, ")
+            needsNewLine = false
+            i += 1
+          } else {
+            if (isInlineKeyword(upperToken)) {
+              append(" ")
+            }
+            append(colors.primaryColor)
+            append(upperToken)
+            append(colors.resetColor)
+            i += 1
+          }
+
+        } else if (token == ",") {
+          append(colors.resetColor)
+          append(token)
+          if (afterSelect && !isInlineKeyword(upperToken)) {
+            debug("$NNL, ")
+            needsNewLine = true
+            columnCount += 1
+          }
+          i += 1
+
+        } else if (token.matches("[(),;=<>!+\\-*/.]")) {
+          if (token.matches("[=<>!+\\-*]")) {
+            append(" ")
+          }
+          append(colors.resetColor)
+          append(token)
+          if (token.matches("[=<>!+\\-*]")) {
+            append(" ")
+          }
+          i += 1
+
+        } else if (token.startsWith("'") || token.startsWith("\"")) {
+          append(colors.secondaryColor)
+          append(token)
+          append(colors.resetColor)
+          i += 1
+
+        } else if (token.matches("[0-9]+(?:\\.[0-9]+)?")) {
+          append(" ")
+          append(colors.secondaryColor)
+          append(token)
+          append(colors.resetColor)
+          i += 1
+
+        } else {
+          if (needsNewLine) {
+            append("\n")
+            append(p.indent)
+            append(p.fieldIndent)
+            debug("!$NNL, ")
+            needsNewLine = false
+
+          } else if (columnCount == 0 && afterSelect && result.nonEmpty && prevToken != "." && !isInlineKeyword(prevToken)) {
+            append("\n")
+            append(p.indent)
+            append(p.fieldIndent)
+
+          } else if (result.nonEmpty && !result.toString.endsWith("(") && !result.toString.endsWith(" ") && prevToken != ".") {
+            append(" ")
+          }
+
+          append(colors.secondaryColor)
+          append(token)
+          append(colors.resetColor)
+          i += 1
+        }
+        debug("\n")
+        if (!isTokenEmpty) {
+          prevToken = token
+        }
+      }
+
+      result.toString
+    }
   }
 
   private def fmtClassName(clazz: Class[_], settings: Formatter.ClassNameSettings): String = {
